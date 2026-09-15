@@ -98,6 +98,16 @@ static void advance(struct scanner *s)
 		.line = s->line \
 	}
 
+#define invalid_token do { \
+		s->cur = NULL; \
+		return (struct token) { \
+			.ty = TK_INVALID, \
+			.col = s->col - 1, \
+			.line = s->line \
+		}; \
+	} while (0)
+
+
 /* Token collecting functions. */
 static struct token collect_num(struct scanner *s)
 {
@@ -157,6 +167,7 @@ static struct token collect_ident_or_keyword(struct scanner *s)
 				  &new_ident_id);
 
 		char *ident_name = malloc(ident_len + 1);
+		clox_assert(ident_name, "memory allocation for ident_name");
 		ident_name[ident_len] = '\0';
 		memcpy(ident_name, start, ident_len);
 
@@ -193,8 +204,53 @@ static struct token collect_punct(struct scanner *s)
 		}
 	}
 
-	s->cur = NULL;
-	return token(TK_INVALID);
+	invalid_token;
+}
+
+struct token collect_str(struct scanner *s)
+{
+	advance(s);  /* consume the " */
+
+	const char *start = s->cur;
+	size_t str_len = 0;
+
+	while (peek(s) != '"' && !is_at_end(s)) {
+		if (peek(s) == '\\') {
+			if (peek_next(s) == '"' || peek_next(s) == '\\') {
+				advance(s);
+				advance(s);
+				str_len++;
+			} else {
+				invalid_token;
+			}
+		} else {
+			advance(s);
+			str_len++;
+		}
+	}
+
+	if (peek(s) == '"') {
+		advance(s);  /* consume the second " */
+
+		char *str = malloc(str_len + 1);
+		clox_assert(str, "memory allocation for str");
+		str[str_len] = '\0';
+
+		for (size_t i = 0; i < str_len; i++) {
+			if (*start == '\\')
+				start++;
+
+			str[i] = *start;
+			start++;
+		}
+
+		struct token tk = token(TK_STR);
+		tk.seminfo.str = str;
+
+		return tk;
+	}
+
+	invalid_token;
 }
 
 struct token scanner_xnext(struct scanner *s)
@@ -210,6 +266,9 @@ struct token scanner_xnext(struct scanner *s)
 
 	if (isalnum(peek(s)) || peek(s) == '_')
 		return collect_ident_or_keyword(s);
+
+	if (peek(s) == '"')
+		return collect_str(s);
 
 	return collect_punct(s);
 }

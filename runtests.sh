@@ -1,6 +1,6 @@
 #!/bin/bash
 
-: "${MODE:=release}"
+: "${MODE:=test}"
 
 export MODE
 
