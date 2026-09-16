@@ -54,7 +54,7 @@ void inst_print(struct inst inst, FILE *out, int line)
 		break;
 
 	case OP_CONSTANT:
-		fprintf(out, "%d", inst_get_char_arg(inst, 0));
+		fprintf(out, "%d", inst_get_u8_arg(inst, 0));
 		break;
 
 	default:
@@ -66,7 +66,7 @@ void inst_print(struct inst inst, FILE *out, int line)
 
 #define argbyte(n) (((char *) inst.args)[n])
 
-char inst_get_char_arg(struct inst inst, size_t offset)
+uint8_t inst_get_u8_arg(struct inst inst, size_t offset)
 {
 	return argbyte(offset);
 }

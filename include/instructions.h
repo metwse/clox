@@ -64,7 +64,7 @@ size_t inst_arg_len(enum opcode);
 void inst_print(struct inst, FILE *out, int line);
 
 /* Get one byte argument. */
-char inst_get_char_arg(struct inst, size_t offset);
+uint8_t inst_get_u8_arg(struct inst, size_t offset);
 
 /* Get 3 byte argument. */
 uint32_t inst_get_u24_arg(struct inst, size_t offset);

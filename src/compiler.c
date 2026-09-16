@@ -27,9 +27,9 @@
 				 (struct inst) { \
 					.op = constant_id > 255 ? \
 						OP_CONSTANT_LONG : OP_CONSTANT, \
-					.args = constant_id > 255 ? \
-						&(char) { constant_id } : \
-						&*(char[]) { \
+					.args = constant_id < 255 ? \
+						&(uint8_t) { constant_id } : \
+						&*(uint8_t[]) { \
 							constant_id & 255, \
 							(constant_id >> 8) & 255, \
 							(constant_id >> 16) & 255, \

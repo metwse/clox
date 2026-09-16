@@ -116,7 +116,7 @@ int vm_run(struct vm *vm)
 		}
 
 		case OP_CONSTANT:
-			constant_index = inst_get_char_arg(inst, 0);
+			constant_index = inst_get_u8_arg(inst, 0);
 			constant_index_init = true;
 
 		// fallthrough
