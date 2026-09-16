@@ -1,8 +1,16 @@
 #ifndef GRAMMAR_H
 #define GRAMMAR_H
 
+#include "../vendor/rdesc/include/grammar.h"
 
-enum token_type {
+
+#define TK_COUNT 39
+
+#define NT_COUNT 16
+#define NT_MAX_ALTERNATIVE_COUNT 6
+#define NT_MAX_ALTERNATIVE_SIZE 4
+
+enum tk_id {
 	/* Single-char tokens. */
 	TK_LPAREN, TK_RPAREN, TK_LBRACE, TK_RBRACE,
 	TK_COMMA, TK_DOT, TK_MINUS, TK_PLUS, TK_SEMI, TK_SLASH, TK_STAR,
@@ -23,30 +31,35 @@ enum token_type {
 	TK_EOF, TK_INVALID
 };
 
-static const char *const punct[] = {
-	"(", ")", "{", "}", ",", ".", "-", "+", ";", "/", "*",
-
-	"!", "!=", "=", "==", ">", ">=", "<", "<=",
+enum nt_id {
+	NT_EXPRESSION,
+	NT_EQUALITY, NT_EQUALITY_REST, NT_EQUALITY_OP,
+	NT_COMPARISON, NT_COMPARISON_REST, NT_COMPARISON_OP,
+	NT_TERM, NT_TERM_REST, NT_TERM_OP,
+	NT_FACTOR, NT_FACTOR_REST, NT_FACTOR_OP,
+	NT_UNARY, NT_UNARY_OP,
+	NT_PRIMARY
 };
 
-static const char *const keyword_names[] = {
-	"and", "class", "else", "false", "fun", "if", "nil", "or",
-	"print", "return", "super", "this", "true", "var", "while",
-};
-
-union seminfo {
+union seminfo_data {
 	int ident_id;
 	double num;
 	char *str;
 };
 
-struct token {
-	enum token_type ty;
-	union seminfo seminfo;
+struct seminfo {
+	union seminfo_data seminfo;
 
 	int line;
 	int col;
 };
+
+extern const char *const tk_names[TK_COUNT];
+
+extern const char *const nt_names[NT_COUNT];
+
+extern const struct rdesc_grammar_symbol production_rules
+	[NT_COUNT][NT_MAX_ALTERNATIVE_COUNT + 1][NT_MAX_ALTERNATIVE_SIZE + 1];
 
 
 #endif

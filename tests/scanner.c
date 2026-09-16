@@ -9,36 +9,38 @@
 
 void test_input(struct scanner *s,
 		const char *input,
-		const enum token_type *types,
-		const union seminfo *seminfos,
+		const enum tk_id *ids,
+		const union seminfo_data *seminfos,
 		size_t len)
 {
 	scanner_feed(s, input);
 
-	struct token tk;
-	for (size_t i = 0; i < len; i++) {
-		tk = scanner_xnext(s);
+	enum tk_id tk_id;
+	struct seminfo seminfo;
 
-		clox_assert(tk.ty == types[i],
+	for (size_t i = 0; i < len; i++) {
+		scanner_xnext(s, &tk_id, &seminfo);
+
+		clox_assert(tk_id == ids[i],
 			    "token type missmatch");
 
-		if (tk.ty == TK_IDENT)
-			clox_assert(tk.seminfo.ident_id == seminfos[i].ident_id,
+		if (tk_id == TK_IDENT)
+			clox_assert(seminfo.seminfo.ident_id == seminfos[i].ident_id,
 				    "ident_id missmatch");
 
-		if (tk.ty == TK_NUM)
-			clox_assert(tk.seminfo.num == seminfos[i].num,
+		if (tk_id == TK_NUM)
+			clox_assert(seminfo.seminfo.num == seminfos[i].num,
 				    "num missmatch");
 
-		if (tk.ty == TK_STR) {
-			clox_assert(strcmp(tk.seminfo.str, seminfos[i].str) == 0,
+		if (tk_id == TK_STR) {
+			clox_assert(strcmp(seminfo.seminfo.str, seminfos[i].str) == 0,
 				    "str missmatch");
-			free(tk.seminfo.str);
+			free(seminfo.seminfo.str);
 		}
 	}
 
-	tk = scanner_xnext(s);
-	clox_assert(tk.ty == TK_EOF, "still has tokens");
+	scanner_xnext(s, &tk_id, &seminfo);
+	clox_assert(tk_id == TK_EOF || tk_id == TK_INVALID, "still has tokens");
 }
 
 
@@ -51,11 +53,11 @@ int main(void)
 
 	test_input(&s,
 		   "    test  123 test2 < =  \n test   ; 321.123 >= >",
-		   (enum token_type[]) {
+		   (enum tk_id[]) {
 			TK_IDENT, TK_NUM, TK_IDENT, TK_LT, TK_EQ, TK_IDENT,
 			TK_SEMI, TK_NUM, TK_GT_EQ, TK_GT, TK_EOF
 		   },
-		   (union seminfo[]) {
+		   (union seminfo_data[]) {
 			[0] = { .ident_id = 0 },
 			[1] = { .num = 123 },
 			[2] = { .ident_id = 1 },
@@ -70,20 +72,20 @@ int main(void)
 
 	test_input(&s,
 		   "    valid if ınvalıd ",
-		   (enum token_type[]) {
+		   (enum tk_id[]) {
 			TK_IDENT, TK_IF, TK_INVALID
 		   },
-		   (union seminfo[]) {
+		   (union seminfo_data[]) {
 			[0] = { .ident_id = 2 },
 		   },
 		   3);
 
 	test_input(&s,
 		   " \"string\" \"\\\"\" \"\" \"\\\\\" \"\\\\\\\"\"",
-		   (enum token_type[]) {
+		   (enum tk_id[]) {
 			TK_STR, TK_STR, TK_STR, TK_STR, TK_STR
 		   },
-		   (union seminfo[]) {
+		   (union seminfo_data[]) {
 			{ .str = "string" },
 			{ .str = "\"" },
 			{ .str = "" },
@@ -95,19 +97,23 @@ int main(void)
 
 	test_input(&s,
 		   "\"unterminated string ",
-		   (enum token_type[]) {
+		   (enum tk_id[]) {
 			TK_INVALID
 		   },
 		   NULL,
 		   1);
 
+	scanner_new_line(&s);
+
 	test_input(&s,
 		   "\"invalid escape sequence \\a ",
-		   (enum token_type[]) {
+		   (enum tk_id[]) {
 			TK_INVALID
 		   },
 		   NULL,
 		   1);
+
+	scanner_new_line(&s);
 
 	scanner_destroy(&s);
 

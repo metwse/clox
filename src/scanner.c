@@ -18,12 +18,12 @@ static struct fhashmap keyword_map;
 
 void scanner_xstatic_init(void)
 {
-	fhashmap_xinit(&keyword_map, sizeof(enum token_type));
+	fhashmap_xinit(&keyword_map, sizeof(enum tk_id));
 
-	for (enum token_type i = TK_AND; i <= TK_WHILE; i++)
+	for (enum tk_id i = TK_AND; i <= TK_WHILE; i++)
 		fhashmap_xinsert(&keyword_map,
-				 keyword_names[i - TK_AND],
-				 &(enum token_type) { i });
+				 tk_names[i],
+				 &(enum tk_id) { i });
 }
 
 void scanner_static_destroy(void)
@@ -56,6 +56,13 @@ void scanner_destroy(struct scanner *s)
 void scanner_feed(struct scanner *s, const char *buf)
 {
 	s->cur = buf;
+}
+
+void scanner_new_line(struct scanner *s)
+{
+	s->cur = NULL;
+	s->line++;
+	s->col = 1;
 }
 
 const char *scanner_get_ident_name(const struct scanner *s, size_t id)
@@ -91,25 +98,10 @@ static void advance(struct scanner *s)
 	s->cur++;
 }
 
-#define token(ty_id) \
-	(struct token) { \
-		.ty = ty_id, \
-		.col = s->col - 1, \
-		.line = s->line \
-	}
-
-#define invalid_token do { \
-		s->cur = NULL; \
-		return (struct token) { \
-			.ty = TK_INVALID, \
-			.col = s->col - 1, \
-			.line = s->line \
-		}; \
-	} while (0)
-
-
 /* Token collecting functions. */
-static struct token collect_num(struct scanner *s)
+static void collect_num(struct scanner *s,
+			enum tk_id *out_id,
+			struct seminfo *out_seminfo)
 {
 	const char *start = s->cur;
 	size_t len = 0;
@@ -135,13 +127,13 @@ static struct token collect_num(struct scanner *s)
 
 	double num = strtod(num_str, NULL);
 
-	struct token tk = token(TK_NUM);
-	tk.seminfo.num = num;
-
-	return tk;
+	*out_id = TK_NUM;
+	out_seminfo->seminfo.num = num;
 }
 
-static struct token collect_ident_or_keyword(struct scanner *s)
+static void collect_ident_or_keyword(struct scanner *s,
+				     enum tk_id *out_id,
+				     struct seminfo *out_seminfo)
 {
 	const char *start = s->cur;
 	size_t ident_len = 0;
@@ -151,11 +143,13 @@ static struct token collect_ident_or_keyword(struct scanner *s)
 		advance(s);
 	}
 
-	enum token_type *keyword_id_ptr = fhashmap_get2(&keyword_map, start, ident_len);
-	if (keyword_id_ptr)
-		return token(*keyword_id_ptr);
+	enum tk_id *keyword_id_ptr = fhashmap_get2(&keyword_map, start, ident_len);
+	if (keyword_id_ptr) {
+		*out_id = *keyword_id_ptr;
+		return;
+	}
 
-	struct token tk = token(TK_IDENT);
+	*out_id = TK_IDENT;
 
 	size_t *ident_id = fhashmap_get2(&s->ident_id_map, start, ident_len);
 	if (ident_id == NULL) {
@@ -173,41 +167,47 @@ static struct token collect_ident_or_keyword(struct scanner *s)
 
 		fstack_xpush(&s->ident_id_rev_map, &ident_name);
 
-		tk.seminfo.ident_id = new_ident_id;
+		out_seminfo->seminfo.ident_id = new_ident_id;
 	} else {
-		tk.seminfo.ident_id = *ident_id;
+		out_seminfo->seminfo.ident_id = *ident_id;
 	}
-
-	return tk;
 }
 
-static struct token collect_punct(struct scanner *s)
+static void collect_punct(struct scanner *s,
+			  enum tk_id *out_id)
 {
 	char c = peek(s);
 
-	for (enum token_type i = TK_LPAREN; i <= TK_STAR; i++) {
-		if (c == punct[i][0]) {
+	for (enum tk_id i = TK_LPAREN; i <= TK_STAR; i++) {
+		if (c == tk_names[i][0]) {
 			advance(s);
-			return token(i);
+
+			*out_id = i;
+			return;
 		}
 	}
 
-	for (enum token_type i = TK_EXCL_EQ; i <= TK_LT_EQ; i += 2) {
-		if (c == punct[i][0]) {
+	for (enum tk_id i = TK_EXCL_EQ; i <= TK_LT_EQ; i += 2) {
+		if (c == tk_names[i][0]) {
 			advance(s);
-			if (peek(s) == punct[i][1]) {
+			if (peek(s) == tk_names[i][1]) {
 				advance(s);
-				return token(i);
+
+				*out_id = i;
+				return;
 			} else {
-				return token(i - 1);
+				*out_id = i - 1;
+				return;
 			}
 		}
 	}
 
-	invalid_token;
+	*out_id = TK_INVALID;
 }
 
-struct token collect_str(struct scanner *s)
+static void collect_str(struct scanner *s,
+			enum tk_id *out_id,
+			struct seminfo *out_seminfo)
 {
 	advance(s);  /* consume the " */
 
@@ -221,7 +221,8 @@ struct token collect_str(struct scanner *s)
 				advance(s);
 				str_len++;
 			} else {
-				invalid_token;
+				*out_id = TK_INVALID;
+				return;
 			}
 		} else {
 			advance(s);
@@ -244,31 +245,28 @@ struct token collect_str(struct scanner *s)
 			start++;
 		}
 
-		struct token tk = token(TK_STR);
-		tk.seminfo.str = str;
-
-		return tk;
+		*out_id = TK_STR;
+		out_seminfo->seminfo.str = str;
+		return;
 	}
 
-	invalid_token;
+	*out_id = TK_INVALID;
 }
 
-struct token scanner_xnext(struct scanner *s)
+void scanner_xnext(struct scanner *s,
+		   enum tk_id *out_id,
+		   struct seminfo *out_seminfo)
 {
 	while (isspace(peek(s)))
 		advance(s);
 
 	if (is_at_end(s))
-		return token(TK_EOF);
-
-	if (isdigit(peek(s)))
-		return collect_num(s);
-
-	if (isalnum(peek(s)) || peek(s) == '_')
-		return collect_ident_or_keyword(s);
-
-	if (peek(s) == '"')
-		return collect_str(s);
-
-	return collect_punct(s);
+		*out_id = TK_EOF;
+	else if (isdigit(peek(s)))
+		collect_num(s, out_id, out_seminfo);
+	else if (isalnum(peek(s)) || peek(s) == '_')
+		collect_ident_or_keyword(s, out_id, out_seminfo);
+	else if (peek(s) == '"')
+		collect_str(s, out_id, out_seminfo);
+	else collect_punct(s, out_id);
 }

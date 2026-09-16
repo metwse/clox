@@ -36,10 +36,13 @@ ifeq ($(CFLAGS),)
 endif
 
 
-# Data structures library, exposes LIBFUN target.
+# External libraries
 LIBFUN_DIR := $(VENDOR_DIR)/libfun
+RDESC_DIR := $(VENDOR_DIR)/rdesc
 
 LIBFUN_MODE := release
+RDESC_MODE := release
+RDESC_FEATURES := full
 
 $(LIBFUN_DIR)/libfun.mk: | $(LIBFUN_DIR)/
 	cd $(LIBFUN_DIR)/ && \
@@ -48,7 +51,12 @@ $(LIBFUN_DIR)/libfun.mk: | $(LIBFUN_DIR)/
 		git fetch --depth 1 origin 97ea792a15f341686c7058ba2b8d7ed4a7e0b62f && \
 		git checkout -q FETCH_HEAD
 
+$(RDESC_DIR)/rdesc.mk:
+	git clone https://github.com/metwse/rdesc.git $(RDESC_DIR) \
+		--branch v0.2.x --depth 1
+
 include $(LIBFUN_DIR)/libfun.mk
+include $(RDESC_DIR)/rdesc.mk
 
 
 SRCS = $(wildcard $(SRC_DIR)/*.c)
@@ -56,14 +64,17 @@ TEST_SRCS = $(wildcard $(TEST_SRC_DIR)/*.c)
 OBJS = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(SRCS))
 TEST_OBJS = $(patsubst $(TEST_SRC_DIR)/%.c,$(TEST_OBJ_DIR)/%.o,$(TEST_SRCS))
 
+LIB_OBJS = $(LIBFUN) $(RDESC)
+
 NONMAIN_OBJS = $(filter-out $(OBJ_DIR)/main.o,$(OBJS))
 
 TEST_TARGETS = $(patsubst $(TEST_SRC_DIR)/%.c,$(TEST_TARGET_DIR)/%,$(TEST_SRCS))
 
-$(TARGET): $(OBJS) $(LIBFUN) | $(TARGET_DIR)/
+$(TARGET): $(OBJS) $(LIB_OBJS) | $(TARGET_DIR)/
 	$(CC) $(CFLAGS) -o $@ $^
 
-$(TEST_TARGET_DIR)/%: $(TEST_OBJ_DIR)/%.o $(NONMAIN_OBJS) $(LIBFUN) | $(TEST_TARGET_DIR)/
+$(TEST_TARGET_DIR)/%: $(TEST_OBJ_DIR)/%.o $(NONMAIN_OBJS) $(LIB_OBJS) \
+		| $(TEST_TARGET_DIR)/
 	$(CC) $(CFLAGS) -o $@ $^
 
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c | $(OBJ_DIR)/
