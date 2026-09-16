@@ -189,8 +189,7 @@ static void collect_punct(struct scanner *s,
 		if (c == tk_names[i][0]) {
 			advance(s);
 
-			*out_id = i;
-			return;
+			return_tk(i);
 		}
 	}
 
