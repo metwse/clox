@@ -98,6 +98,13 @@ static void advance(struct scanner *s)
 	s->cur++;
 }
 
+#define return_tk(id) do { \
+		*out_id = id; \
+		out_seminfo->line = s->line; \
+		out_seminfo->col = s->col; \
+		return; \
+	} while (0)
+
 /* Token collecting functions. */
 static void collect_num(struct scanner *s,
 			enum tk_id *out_id,
@@ -127,8 +134,8 @@ static void collect_num(struct scanner *s,
 
 	double num = strtod(num_str, NULL);
 
-	*out_id = TK_NUM;
 	out_seminfo->seminfo.num = num;
+	return_tk(TK_NUM);
 }
 
 static void collect_ident_or_keyword(struct scanner *s,
@@ -145,11 +152,8 @@ static void collect_ident_or_keyword(struct scanner *s,
 
 	enum tk_id *keyword_id_ptr = fhashmap_get2(&keyword_map, start, ident_len);
 	if (keyword_id_ptr) {
-		*out_id = *keyword_id_ptr;
-		return;
+		return_tk(*keyword_id_ptr);
 	}
-
-	*out_id = TK_IDENT;
 
 	size_t *ident_id = fhashmap_get2(&s->ident_id_map, start, ident_len);
 	if (ident_id == NULL) {
@@ -171,10 +175,13 @@ static void collect_ident_or_keyword(struct scanner *s,
 	} else {
 		out_seminfo->seminfo.ident_id = *ident_id;
 	}
+
+	return_tk(TK_IDENT);
 }
 
 static void collect_punct(struct scanner *s,
-			  enum tk_id *out_id)
+			  enum tk_id *out_id,
+			  struct seminfo *out_seminfo)
 {
 	char c = peek(s);
 
@@ -193,16 +200,14 @@ static void collect_punct(struct scanner *s,
 			if (peek(s) == tk_names[i][1]) {
 				advance(s);
 
-				*out_id = i;
-				return;
+				return_tk(i);
 			} else {
-				*out_id = i - 1;
-				return;
+				return_tk(i - 1);
 			}
 		}
 	}
 
-	*out_id = TK_INVALID;
+	return_tk(TK_INVALID);
 }
 
 static void collect_str(struct scanner *s,
@@ -221,8 +226,7 @@ static void collect_str(struct scanner *s,
 				advance(s);
 				str_len++;
 			} else {
-				*out_id = TK_INVALID;
-				return;
+				return_tk(TK_INVALID);
 			}
 		} else {
 			advance(s);
@@ -245,12 +249,11 @@ static void collect_str(struct scanner *s,
 			start++;
 		}
 
-		*out_id = TK_STR;
 		out_seminfo->seminfo.str = str;
-		return;
+		return_tk(TK_STR);
 	}
 
-	*out_id = TK_INVALID;
+	return_tk(TK_INVALID);
 }
 
 void scanner_xnext(struct scanner *s,
@@ -261,12 +264,12 @@ void scanner_xnext(struct scanner *s,
 		advance(s);
 
 	if (is_at_end(s))
-		*out_id = TK_EOF;
+		return_tk(TK_EOF);
 	else if (isdigit(peek(s)))
 		collect_num(s, out_id, out_seminfo);
 	else if (isalnum(peek(s)) || peek(s) == '_')
 		collect_ident_or_keyword(s, out_id, out_seminfo);
 	else if (peek(s) == '"')
 		collect_str(s, out_id, out_seminfo);
-	else collect_punct(s, out_id);
+	else collect_punct(s, out_id, out_seminfo);
 }

@@ -103,3 +103,12 @@ struct inst chunk_read_inst(const struct chunk *c, size_t offset)
 		.args = inst_bytes + 1
 	};
 }
+
+uint32_t chunk_xpush_constant(struct chunk *c, const struct clox_value *v)
+{
+	uint32_t constant_id = fstack_len(&c->constants);
+
+	fstack_xpush(&c->constants, v);
+
+	return constant_id;
+}

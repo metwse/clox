@@ -1,7 +1,6 @@
 #ifndef SCANNER_H
 #define SCANNER_H
 
-#include "common.h"
 #include "grammar.h"
 
 #include "../vendor/libfun/include/hashmap.h"

@@ -53,7 +53,7 @@ $(LIBFUN_DIR)/libfun.mk: | $(LIBFUN_DIR)/
 
 $(RDESC_DIR)/rdesc.mk:
 	git clone https://github.com/metwse/rdesc.git $(RDESC_DIR) \
-		--branch v0.2.x --depth 1
+		--branch v0.3.0-preview --depth 1
 
 include $(LIBFUN_DIR)/libfun.mk
 include $(RDESC_DIR)/rdesc.mk

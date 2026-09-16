@@ -8,6 +8,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdio.h>
 
 
 void vm_xinit(struct vm *vm)
@@ -36,7 +37,7 @@ static struct clox_value pop(struct vm *vm) {
 
 static struct clox_value peek(struct vm *vm, size_t distance) {
 	return *(struct clox_value *) fstack_at(&vm->stack,
-						fstack_len(&vm->stack) - distance);
+						fstack_len(&vm->stack) - distance - 1);
 }
 
 static bool values_equal(struct clox_value a, struct clox_value b)
@@ -51,10 +52,31 @@ static bool values_equal(struct clox_value a, struct clox_value b)
 		return AS_BOOL(a) == AS_BOOL(b);
 	case VAL_NIL:
 		return true;
-	default:
-		return false; // unreachable;
 	}
 
+	return false; // unreachable;
+}
+
+static void print_val(struct clox_value v)
+{
+	switch (v.type) {
+	case VAL_NUM:
+		printf("%g\n", AS_NUM(v));
+		break;
+
+	case VAL_BOOL:
+		printf(AS_BOOL(v) ? "true\n" : "false\n");
+		break;
+
+	case VAL_NIL:
+		printf("nil\n");
+		break;
+	}
+}
+
+static bool is_falsey(struct clox_value v)
+{
+	return IS_NIL(v) || (IS_BOOL(v) && !AS_BOOL(v));
 }
 
 // TODO: query line info
@@ -65,7 +87,7 @@ static bool values_equal(struct clox_value a, struct clox_value b)
 
 #define binary_op(val_type, op) do { \
 		if (!IS_NUM(peek(vm, 0)) || !IS_NUM(peek(vm, 1))) { \
-			runtime_error("Operands must be numbers."); \
+			runtime_error("operands must be numbers"); \
 		} \
 		double b = AS_NUM(pop(vm)); \
 		double a = AS_NUM(pop(vm)); \
@@ -78,12 +100,20 @@ int vm_run(struct vm *vm)
 		struct inst inst = chunk_read_inst(vm->current_chunk, vm->pc);
 		struct chunk *c = (struct chunk *) vm->current_chunk;
 
+		vm->pc += 1 + inst_arg_len(inst.op);
+
 		uint32_t constant_index;
 		bool constant_index_init = false;
 
 		switch (inst.op) {
 		case OP_RETURN:
 			return 0;
+
+		case OP_PRINT: {
+			print_val(pop(vm));
+
+			break;
+		}
 
 		case OP_CONSTANT:
 			constant_index = inst_get_char_arg(inst, 0);
@@ -106,23 +136,26 @@ int vm_run(struct vm *vm)
 			struct clox_value a = pop(vm);
 
 			xpush(vm, &BOOL_VAL(values_equal(a, b)));
-
 			break;
 		}
-		case OP_GREATER: binary_op(NUM_VAL, >); break;
-		case OP_LESS: binary_op(NUM_VAL, <); break;
+
+		case OP_GREATER: binary_op(BOOL_VAL, >); break;
+		case OP_LESS: binary_op(BOOL_VAL, <); break;
 
 		case OP_ADD: binary_op(NUM_VAL, +); break;
 		case OP_SUBSTRACT: binary_op(NUM_VAL, -); break;
 		case OP_MULTIPLY: binary_op(NUM_VAL, *); break;
 		case OP_DIVIDE: binary_op(NUM_VAL, /); break;
 
+		case OP_NOT:
+			xpush(vm, &BOOL_VAL(is_falsey(pop(vm))));
+			break;
+
 		case OP_NEGATE:
 			if (!IS_NUM(peek(vm, 0)))
-				runtime_error("Only negatate numers.");
+				runtime_error("can only negatate numers");
 
 			xpush(vm, &NUM_VAL(-AS_NUM(pop(vm))));
-
 			break;
 		}
 	}

@@ -2,6 +2,8 @@
 
 #include "../vendor/rdesc/include/rule_macros.h"
 
+#include "stdlib.h"
+
 
 const char *const tk_names[TK_COUNT] = {
 	"(", ")", "{", "}", ",", ".", "-", "+", ";", "/", "*",
@@ -17,6 +19,7 @@ const char *const tk_names[TK_COUNT] = {
 };
 
 const char *const nt_names[NT_COUNT] = {
+	"decl", "stmt",
 	"expression",
 	"equality", "equality-rest", "equality-op",
 	"comparison", "comparison-rest", "comparison-op",
@@ -28,6 +31,15 @@ const char *const nt_names[NT_COUNT] = {
 
 const struct rdesc_grammar_symbol production_rules
 	[NT_COUNT][NT_MAX_ALTERNATIVE_COUNT + 1][NT_MAX_ALTERNATIVE_SIZE + 1] = {
+/* <decl> ::= */ r(
+	NT(STMT)
+),
+
+/* <stmt> ::= */ r(
+	NT(EXPRESSION), TK(SEMI)
+alt	TK(PRINT), NT(EXPRESSION), TK(SEMI)
+),
+
 /* <expression> ::= */ r(
 	NT(EQUALITY)
 ),
@@ -80,3 +92,11 @@ alt	TK(NIL)
 alt	TK(LPAREN), NT(EXPRESSION), TK(RPAREN)
 )
 };
+
+void token_destroyer(uint16_t id, void *seminfo)
+{
+	if (id == TK_STR) {
+		free(((struct seminfo *) seminfo)->seminfo.str);
+	}
+
+}

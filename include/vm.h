@@ -2,6 +2,7 @@
 #define VM_H
 
 #include "chunk.h"
+#include "common.h"
 
 #include "../vendor/libfun/include/stack.h"
 
@@ -28,7 +29,7 @@ void vm_set_chunk(struct vm *, const struct chunk *);
 
 /* Set the chunk to be interpreted. Returns non-zero if a runtime error
  * occured. */
-int vm_run(struct vm *);
+int vm_run(struct vm *) _wur;
 
 
 #endif

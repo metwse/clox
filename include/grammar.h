@@ -6,7 +6,7 @@
 
 #define TK_COUNT 39
 
-#define NT_COUNT 16
+#define NT_COUNT 18
 #define NT_MAX_ALTERNATIVE_COUNT 6
 #define NT_MAX_ALTERNATIVE_SIZE 4
 
@@ -32,6 +32,9 @@ enum tk_id {
 };
 
 enum nt_id {
+	NT_DECL,
+	NT_STMT,
+
 	NT_EXPRESSION,
 	NT_EQUALITY, NT_EQUALITY_REST, NT_EQUALITY_OP,
 	NT_COMPARISON, NT_COMPARISON_REST, NT_COMPARISON_OP,
@@ -60,6 +63,8 @@ extern const char *const nt_names[NT_COUNT];
 
 extern const struct rdesc_grammar_symbol production_rules
 	[NT_COUNT][NT_MAX_ALTERNATIVE_COUNT + 1][NT_MAX_ALTERNATIVE_SIZE + 1];
+
+void token_destroyer(uint16_t, void *);
 
 
 #endif
