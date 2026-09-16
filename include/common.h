@@ -1,8 +1,8 @@
 #ifndef COMMON_H
 #define COMMON_H
 
-
 #include <stdio.h>  // IWYU pragma: export
+
 
 #define __stringify_detail(a) #a
 #define __stringify(a) __stringify_detail(a)

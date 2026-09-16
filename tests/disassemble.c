@@ -1,42 +1,38 @@
 #include "../include/instructions.h"
-#include "../include/vm.h"
+#include "../include/chunk.h"
 
 
 int main(void)
 {
-	struct vm vm;
+	struct chunk c;
 
-	vm_xinit(&vm);
+	chunk_xinit(&c);
 
-	vm_disassemble(&vm, stderr, 0, 0);
+	chunk_disassemble(&c, stderr, 0, 0);
 
-	vm_chunk_xwrite_inst(&vm,
-			     1,
-			     (struct inst) {
-				     .op = OP_RETURN
-			     });
+	chunk_xwrite_inst(&c, 1, (struct inst) { .op = OP_RETURN });
 
-	vm_chunk_xwrite_inst(&vm,
-			     1,
-			     (struct inst) {
+	chunk_xwrite_inst(&c,
+			  1,
+			  (struct inst) {
 				    .op = OP_CONSTANT,
 				    .args = &(char) { 1 }
-			     });
+			  });
 
-	vm_chunk_xwrite_inst(&vm,
-			     2,
-			     (struct inst) {
-				    .op = OP_CONSTANT_LONG,
-				    .args = &(char[3]) { 1, 0, 0 }
-			     });
+	chunk_xwrite_inst(&c,
+			  2,
+			  (struct inst) {
+				  .op = OP_CONSTANT_LONG,
+				  .args = &(char[3]) { 1, 0, 0 }
+			  });
 
-	vm_chunk_xwrite_inst(&vm, 3, (struct inst) { .op = OP_RETURN, });
-	vm_chunk_xwrite_inst(&vm, 3, (struct inst) { .op = OP_RETURN, });
-	vm_chunk_xwrite_inst(&vm, 4, (struct inst) { .op = OP_RETURN, });
-	vm_chunk_xwrite_inst(&vm, 6, (struct inst) { .op = OP_RETURN, });
+	chunk_xwrite_inst(&c, 3, (struct inst) { .op = OP_RETURN, });
+	chunk_xwrite_inst(&c, 3, (struct inst) { .op = OP_RETURN, });
+	chunk_xwrite_inst(&c, 4, (struct inst) { .op = OP_RETURN, });
+	chunk_xwrite_inst(&c, 6, (struct inst) { .op = OP_RETURN, });
 
-	vm_disassemble(&vm, stderr, 0, 0);
-	vm_disassemble(&vm, stderr, 1, 2);
+	chunk_disassemble(&c, stderr, 0, 0);
+	chunk_disassemble(&c, stderr, 1, 2);
 
-	vm_destroy(&vm);
+	chunk_destroy(&c);
 }

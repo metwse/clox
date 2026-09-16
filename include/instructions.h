@@ -6,10 +6,44 @@
 #include <stdio.h>
 
 
+#define LAST_OPCODE OP_NEGATE
+
 enum opcode {
 	OP_RETURN,
+
 	OP_CONSTANT,
 	OP_CONSTANT_LONG,
+
+	OP_NIL,
+	OP_TRUE,
+	OP_FALSE,
+
+	OP_EQUAL,
+	OP_GREATER,
+	OP_LESS,
+
+	OP_ADD,
+	OP_SUBSTRACT,
+	OP_MULTIPLY,
+	OP_DIVIDE,
+	OP_NEGATE,
+};
+
+static const char *const opcode_names[] = {
+	"RETURN",
+	"CONSTANT",
+	"CONSTANT_LONG",
+	"NIL",
+	"TRUE",
+	"FALSE",
+	"EQUAL",
+	"GREATER",
+	"LESS",
+	"ADD",
+	"SUBSTRACT",
+	"MULTIPLY",
+	"DIVIDE",
+	"NEGATE",
 };
 
 struct inst {

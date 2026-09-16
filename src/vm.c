@@ -1,111 +1,129 @@
 #include "../include/clox.h"
+#include "../include/chunk.h"
+#include "../include/common.h"
 #include "../include/instructions.h"
 #include "../include/vm.h"
 
 #include "../vendor/libfun/include/stack.h"
 
 #include <stdbool.h>
-#include <stdio.h>
-
-
-struct chunk_line_info {
-	int line;
-	int count;
-};
+#include <stdint.h>
 
 
 void vm_xinit(struct vm *vm)
 {
-	fstack_xinit(&vm->chunk, 1);
-	fstack_xinit(&vm->chunk_line_info, sizeof(struct chunk_line_info));
-
-	fstack_xinit(&vm->constants, sizeof(struct clox_value));
 	fstack_xinit(&vm->stack, sizeof(struct clox_value));
-
-	vm->pc = 0;
 }
 
 void vm_destroy(struct vm *vm)
 {
-	fstack_destroy(&vm->chunk);
-	fstack_destroy(&vm->chunk_line_info);
-
-	fstack_destroy(&vm->constants);
 	fstack_destroy(&vm->stack);
 }
 
-void vm_chunk_xwrite(struct vm *vm, int line, char *chunk, size_t len)
+void vm_set_chunk(struct vm *vm, const struct chunk *c)
 {
-	if (!len)
-		return;
+	vm->current_chunk = c;
+	vm->pc = 0;
+}
 
-	/* TODO: multipush */
-	for (size_t i = 0; i < len; i++)
-		fstack_xpush(&vm->chunk, &chunk[i]);
+static void xpush(struct vm *vm, struct clox_value *v) {
+	fstack_xpush(&vm->stack, v);
+}
 
-	bool count_incremented = false;
+static struct clox_value pop(struct vm *vm) {
+	return *(struct clox_value *) fstack_pop(&vm->stack);
+}
 
-	if (fstack_len(&vm->chunk_line_info) > 0) {
-		struct chunk_line_info *cli = fstack_top(&vm->chunk_line_info);
+static struct clox_value peek(struct vm *vm, size_t distance) {
+	return *(struct clox_value *) fstack_at(&vm->stack,
+						fstack_len(&vm->stack) - distance);
+}
 
-		if (cli->line == line) {
-			cli->count += len;
-			count_incremented = true;
-		}
+static bool values_equal(struct clox_value a, struct clox_value b)
+{
+	if (a.type != b.type)
+		return false;
+
+	switch (a.type) {
+	case VAL_NUM:
+		return AS_NUM(a) == AS_NUM(b);
+	case VAL_BOOL:
+		return AS_BOOL(a) == AS_BOOL(b);
+	case VAL_NIL:
+		return true;
+	default:
+		return false; // unreachable;
 	}
 
-	if (!count_incremented)
-		fstack_xpush(&vm->chunk_line_info,
-			     &(struct chunk_line_info) {
-				.line = line,
-				.count = len
-			     });
 }
 
-void vm_chunk_xwrite_inst(struct vm *vm,
-				 int line,
-				 struct inst ins)
+// TODO: query line info
+#define runtime_error(...) do { \
+		clox_report(__VA_ARGS__); \
+		return 1; \
+	} while (0);
+
+#define binary_op(val_type, op) do { \
+		if (!IS_NUM(peek(vm, 0)) || !IS_NUM(peek(vm, 1))) { \
+			runtime_error("Operands must be numbers."); \
+		} \
+		double b = AS_NUM(pop(vm)); \
+		double a = AS_NUM(pop(vm)); \
+		xpush(vm, &val_type(a op b)); \
+	} while (0)
+
+int vm_run(struct vm *vm)
 {
-	vm_chunk_xwrite(vm, line, &(char) { ins.op }, 1);
-	vm_chunk_xwrite(vm, line, ins.args, inst_arg_len(ins.op));
-}
+	while (true) {
+		struct inst inst = chunk_read_inst(vm->current_chunk, vm->pc);
+		struct chunk *c = (struct chunk *) vm->current_chunk;
 
-void vm_disassemble(struct vm *vm, FILE *out, size_t offset, size_t len)
-{
-	if (fstack_len(&vm->chunk) == 0)
-		return;
+		uint32_t constant_index;
+		bool constant_index_init = false;
 
-	size_t cli_index = 0;
-	size_t total_instructions = 0;
-	int prev_line = -1;
-	int line;
+		switch (inst.op) {
+		case OP_RETURN:
+			return 0;
 
-	for (size_t i = 0;
-	     (len == 0 || i < len) && offset + i < fstack_len(&vm->chunk);) {
-		for (; total_instructions <= offset + i; cli_index++) {
-			struct chunk_line_info *cli =
-				fstack_at(&vm->chunk_line_info, cli_index);
+		case OP_CONSTANT:
+			constant_index = inst_get_char_arg(inst, 0);
+			constant_index_init = true;
 
-			total_instructions += cli->count;
-			line = cli->line;
+		// fallthrough
+		case OP_CONSTANT_LONG:
+			if (!constant_index_init)
+				constant_index = inst_get_u24_arg(inst, 0);
+
+			xpush(vm, fstack_at(&c->constants, constant_index));
+			break;
+
+		case OP_NIL: xpush(vm, &NIL_VAL); break;
+		case OP_TRUE: xpush(vm, &BOOL_VAL(true)); break;
+		case OP_FALSE: xpush(vm, &BOOL_VAL(false)); break;
+
+		case OP_EQUAL: {
+			struct clox_value b = pop(vm);
+			struct clox_value a = pop(vm);
+
+			xpush(vm, &BOOL_VAL(values_equal(a, b)));
+
+			break;
 		}
+		case OP_GREATER: binary_op(NUM_VAL, >); break;
+		case OP_LESS: binary_op(NUM_VAL, <); break;
 
-		struct inst ins = vm_chunk_read_inst(vm, offset + i);
-		i += 1 + inst_arg_len(ins.op);
+		case OP_ADD: binary_op(NUM_VAL, +); break;
+		case OP_SUBSTRACT: binary_op(NUM_VAL, -); break;
+		case OP_MULTIPLY: binary_op(NUM_VAL, *); break;
+		case OP_DIVIDE: binary_op(NUM_VAL, /); break;
 
-		fprintf(out, "%04zu ", offset + i);
-		inst_print(ins, out, prev_line == line ? -1 : line);
+		case OP_NEGATE:
+			if (!IS_NUM(peek(vm, 0)))
+				runtime_error("Only negatate numers.");
 
-		prev_line = line;
+			xpush(vm, &NUM_VAL(-AS_NUM(pop(vm))));
+
+			break;
+		}
 	}
-}
-
-struct inst vm_chunk_read_inst(struct vm *vm, size_t offset)
-{
-	char *inst_bytes = fstack_at(&vm->chunk, offset);
-
-	return (struct inst) {
-		.op = (enum opcode) inst_bytes[0],
-		.args = inst_bytes + 1
-	};
 }

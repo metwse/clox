@@ -15,39 +15,34 @@ size_t inst_arg_len(enum opcode op)
 	case OP_CONSTANT:
 		return 1;
 
+	case OP_NIL:
+	case OP_TRUE:
+	case OP_FALSE:
+	case OP_EQUAL:
+	case OP_LESS:
+	case OP_GREATER:
+	case OP_ADD:
+	case OP_SUBSTRACT:
+	case OP_MULTIPLY:
+	case OP_DIVIDE:
+	case OP_NEGATE:
 	case OP_RETURN:
 		return 0;
-
-	default:
-		return 0;
 	}
+
+	// Unreachable
+	return 0;
 }
 
 void inst_print(struct inst inst, FILE *out, int line)
 {
-	const char *opcode_name;
-
-	switch (inst.op) {
-	case OP_CONSTANT_LONG:
-		opcode_name = "CONSTANT_LONG";
-		break;
-
-	case OP_CONSTANT:
-		opcode_name = "CONSTANT";
-		break;
-
-	case OP_RETURN:
-		opcode_name = "RETURN";
-		break;
-
-	default:
-		opcode_name = "??";
-	}
-
 	if (line == -1)
 		fprintf(out, "   | ");
 	else
 		fprintf(out, "%4d ", line);
+
+	const char *const opcode_name =
+		inst.op > LAST_OPCODE ? "??" : opcode_names[inst.op];
 
 	fprintf(out, "%16s . ", opcode_name);
 
