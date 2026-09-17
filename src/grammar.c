@@ -32,18 +32,22 @@ const char *const nt_names[NT_COUNT] = {
 	"block", "block_decls",
 
 	"expression", "optexpression",
+	"asgn", "asgn_rest",
+	"logic_or", "logic_or_rest",
+	"logic_and", "logic_and_rest",
 	"equality", "equality_rest", "equality_op",
 	"comparison", "comparison_rest", "comparison_op",
 	"term", "term_rest", "term_op",
 	"factor", "factor_rest", "factor_op",
 	"unary", "unary_op",
+	"call", "call_optargs_or_getattr",
 	"primary",
 
 	"class_decl_optinheritance", "class_decl_functions",
 	"var_decl_optasgn",
 	"function",
-	"function_params", "function_params_rest",
-	"function_args", "function_args_rest",
+	"function_params", "function_params_rest", "function_optparams",
+	"function_args", "function_args_rest", "function_optargs",
 };
 
 const struct rdesc_grammar_symbol production_rules
@@ -115,10 +119,21 @@ alt	EPSILON
 ),
 
 /* <expression> ::= */ r(
-	NT(EQUALITY)
+	NT(ASGN)
 ),
 /* <optexpression> ::= */
 	ropt(NT(EXPRESSION)),
+
+/* <asgn> ::= */ r(
+	NT(LOGIC_OR), NT(ASGN_OPTEQ)
+),
+/* <asgn-opteq> ::= */
+	ropt(TK(EQ), NT(ASGN)),
+
+/* <logic-or> ::= */
+	rrr(LOGIC_OR, (NT(LOGIC_AND)), (TK(OR), NT(LOGIC_AND))),
+/* <logic-and> ::= */
+	rrr(LOGIC_AND, (NT(EQUALITY)), (TK(AND), NT(EQUALITY))),
 
 /* <equality> ::= */
 	rrr(EQUALITY, (NT(COMPARISON)), (NT(EQUALITY_OP), NT(COMPARISON))),
@@ -152,11 +167,21 @@ alt	TK(STAR)
 
 /* <unary> ::= */ r(
 	NT(UNARY_OP), NT(UNARY)
-alt	NT(PRIMARY)
+alt	NT(CALL)
 ),
 /* <unary-op> ::= */ r(
 	TK(PLUS)
-alt 	TK(MINUS)
+alt	TK(MINUS)
+alt	TK(EXCL)
+),
+
+/* <call> ::= */ r(
+	NT(PRIMARY), NT(CALL_OPTARGS_OR_GETATTR)
+),
+/* <call-optargs-or-get> ::= */ r(
+	TK(LPAREN), NT(FUNCTION_OPTARGS), TK(RPAREN), NT(CALL_OPTARGS_OR_GETATTR)
+alt	TK(DOT), TK(IDENT), NT(CALL_OPTARGS_OR_GETATTR)
+alt	EPSILON
 ),
 
 /* <primary> ::= */ r(
@@ -166,6 +191,9 @@ alt	TK(TRUE)
 alt	TK(FALSE)
 alt	TK(NIL)
 alt	TK(LPAREN), NT(EXPRESSION), TK(RPAREN)
+alt	TK(THIS)
+alt	TK(SUPER), TK(DOT), TK(IDENT)
+alt	TK(IDENT)
 ),
 
 /* <class-decl-optinheritance> ::= */
@@ -177,12 +205,16 @@ alt	TK(LPAREN), NT(EXPRESSION), TK(RPAREN)
 	ropt(TK(EQ), NT(EXPRESSION)),
 
 /* <function> ::= */ r(
-	TK(IDENT), TK(LPAREN), NT(FUNCTION_PARAMS), TK(RPAREN), NT(BLOCK)
+	TK(IDENT), TK(LPAREN), NT(FUNCTION_OPTPARAMS), TK(RPAREN), NT(BLOCK)
 ),
 /* <function-params> ::= */
 	rrr(FUNCTION_PARAMS, (TK(IDENT)), (TK(COMMA), TK(IDENT))),
+/* <function-optparams> ::= */
+	ropt(NT(FUNCTION_PARAMS)),
 /* <function-args> ::= */
-	rrr(FUNCTION_ARGS, (NT(EXPRESSION)), (TK(COMMA), NT(EXPRESSION)))
+	rrr(FUNCTION_ARGS, (NT(EXPRESSION)), (TK(COMMA), NT(EXPRESSION))),
+/* <function-optargs> ::= */
+	ropt(NT(FUNCTION_ARGS))
 };
 
 void token_destroyer(uint16_t id, void *seminfo)

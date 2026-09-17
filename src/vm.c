@@ -94,7 +94,7 @@ static void print_val(struct val v)
 
 static bool is_falsey(struct val v)
 {
-	return IS_NIL(v) || (IS_BOOL(v) && !AS_BOOL(v));
+	return IS_NIL(v) || (IS_BOOL(v) && !AS_BOOL(v)) || (IS_NUM(v) && !AS_NUM(v));
 }
 
 // TODO: query line info
@@ -176,6 +176,17 @@ int vm_run(struct vm *vm)
 		case OP_SUBSTRACT: binary_op(NUM_VAL, -); break;
 		case OP_MULTIPLY: binary_op(NUM_VAL, *); break;
 		case OP_DIVIDE: binary_op(NUM_VAL, /); break;
+
+		case OP_AND:
+		case OP_OR: {
+			struct val b = pop(vm);
+			struct val a = pop(vm);
+			if (inst.op == OP_AND)
+				xpush(vm, &BOOL_VAL(!is_falsey(a) && !is_falsey(b)));
+			else
+				xpush(vm, &BOOL_VAL(!is_falsey(a) || !is_falsey(b)));
+			break;
+		}
 
 		case OP_NOT:
 			xpush(vm, &BOOL_VAL(is_falsey(pop(vm))));

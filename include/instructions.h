@@ -29,6 +29,8 @@ enum opcode {
 	OP_DIVIDE,
 
 	OP_NEGATE,
+	OP_AND,
+	OP_OR,
 	OP_NOT,
 };
 
@@ -48,6 +50,8 @@ static const char *const opcode_names[] = {
 	"MULTIPLY",
 	"DIVIDE",
 	"NEGATE",
+	"AND",
+	"OR",
 	"NOT",
 };
 

@@ -41,20 +41,62 @@
 static void compile_expression(struct chunk *c, struct rdesc_node n, int *line)
 {
 	switch (rid(n)) {
-	case NT_EXPRESSION:
-		rdesc_flip_left(n, 0);
-
-		compile_expression(c, rchild(n, 0), line);
-		break;
-
+	/* the rrr rules that have a rrr child */
+	case NT_LOGIC_OR:
+	case NT_LOGIC_AND:
 	case NT_EQUALITY:
+	case NT_COMPARISON:
+	case NT_TERM:
 		switch (ralt_idx(n)) {
 		case 0:
 			rdesc_flip_left(n, 2);
-
 			compile_expression(c, rchild(n, 0), line);
 			compile_expression(c, rchild(n, 2), line);
 
+			break;
+
+		case 1:
+			rdesc_flip_left(n, 0);
+			compile_expression(c, rchild(n, 0), line);
+
+			break;
+		}
+		break;
+
+	default:
+		break;
+	}
+
+	switch (rid(n)) {
+	case NT_EXPRESSION:
+		compile_expression(c, rchild(n, 0), line);
+		break;
+
+	case NT_ASGN:
+		rdesc_flip_left(n, 0);
+
+		compile_expression(c, rchild(n, 0), line);
+		compile_expression(c, rchild(n, 1), line);
+
+		break;
+
+	case NT_ASGN_OPTEQ:
+		if (ralt_idx(n) == 0)
+			clox_fatal("variables are not implemented yet");
+		break;
+
+	case NT_LOGIC_OR:
+		if (ralt_idx(n) == 0)
+			emit_byte(OP_OR);
+		break;
+
+	case NT_LOGIC_AND:
+		if (ralt_idx(n) == 0)
+			emit_byte(OP_AND);
+		break;
+
+	case NT_EQUALITY:
+		if (ralt_idx(n) == 0) {
 			switch (ralt_idx(rchild(n, 1))) {
 			case 0:
 				emit_bytes(OP_EQUAL, OP_NOT);
@@ -63,26 +105,11 @@ static void compile_expression(struct chunk *c, struct rdesc_node n, int *line)
 				emit_byte(OP_EQUAL);
 				break;
 			}
-
-			break;
-
-		case 1:
-			rdesc_flip_left(n, 0);
-
-			compile_expression(c, rchild(n, 0), line);
-
-			break;
 		}
 		break;
 
 	case NT_COMPARISON:
-		switch (ralt_idx(n)) {
-		case 0:
-			rdesc_flip_left(n, 2);
-
-			compile_expression(c, rchild(n, 0), line);
-			compile_expression(c, rchild(n, 2), line);
-
+		if (ralt_idx(n) == 0) {
 			switch (ralt_idx(rchild(n, 1))) {
 			case 0:
 				emit_byte(OP_GREATER);
@@ -97,26 +124,11 @@ static void compile_expression(struct chunk *c, struct rdesc_node n, int *line)
 				emit_bytes(OP_GREATER, OP_NOT);
 				break;
 			}
-
-			break;
-
-		case 1:
-			rdesc_flip_left(n, 0);
-
-			compile_expression(c, rchild(n, 0), line);
-
-			break;
 		}
 		break;
 
 	case NT_TERM:
-		switch (ralt_idx(n)) {
-		case 0:
-			rdesc_flip_left(n, 2);
-
-			compile_expression(c, rchild(n, 0), line);
-			compile_expression(c, rchild(n, 2), line);
-
+		if (ralt_idx(n) == 0) {
 			switch (ralt_idx(rchild(n, 1))) {
 			case 0:
 				emit_byte(OP_SUBSTRACT);
@@ -125,15 +137,6 @@ static void compile_expression(struct chunk *c, struct rdesc_node n, int *line)
 				emit_byte(OP_ADD);
 				break;
 			}
-
-			break;
-
-		case 1:
-			rdesc_flip_left(n, 0);
-
-			compile_expression(c, rchild(n, 0), line);
-
-			break;
 		}
 		break;
 
@@ -168,11 +171,34 @@ static void compile_expression(struct chunk *c, struct rdesc_node n, int *line)
 
 			if (ralt_idx(rchild(n, 0)) == 1)
 				emit_byte(OP_NEGATE);
+			else if (ralt_idx(rchild(n, 0)) == 2)
+				emit_byte(OP_NOT);
 
 			break;
 
 		case 1:
 			compile_expression(c, rchild(n, 0), line);
+
+			break;
+		}
+		break;
+
+	case NT_CALL:
+		compile_expression(c, rchild(n, 0), line);
+		compile_expression(c, rchild(n, 1), line);
+		break;
+
+	case NT_CALL_OPTARGS_OR_GETATTR:
+		switch (ralt_idx(n)) {
+		case 0:
+			clox_fatal("function calls are not implemented yet");
+			break;
+
+		case 1:
+			clox_fatal("getattr is not implemented yet");
+			break;
+
+		case 2:
 			break;
 		}
 		break;
@@ -209,6 +235,18 @@ static void compile_expression(struct chunk *c, struct rdesc_node n, int *line)
 		case 5:
 			compile_expression(c, rchild(n, 1), line);
 			break;
+
+		case 6:
+			clox_fatal("'this' keyword is not implemented yet");
+			break;
+
+		case 7:
+			clox_fatal("attr inheritance is not implemented yet");
+			break;
+
+		case 8:
+			clox_fatal("variables are not implemented yet");
+			break;
 		}
 		break;
 	}
@@ -226,11 +264,11 @@ static void compile_stmt(struct chunk *c, struct rdesc_node n, int *line)
 		break;
 
 	case NT_FOR_STMT:
-		clox_fatal("for_stmt is not implemented yet.");
+		clox_fatal("for_stmt is not implemented yet");
 		break;
 
 	case NT_IF_STMT:
-		clox_fatal("if_stmt is not implemented yet.");
+		clox_fatal("if_stmt is not implemented yet");
 		break;
 
 	case NT_PRINT_STMT:
@@ -242,15 +280,15 @@ static void compile_stmt(struct chunk *c, struct rdesc_node n, int *line)
 		break;
 
 	case NT_RETURN_STMT:
-		clox_fatal("return_stmt is not implemented yet.");
+		clox_fatal("return_stmt is not implemented yet");
 		break;
 
 	case NT_WHILE_STMT:
-		clox_fatal("while_stmt is not implemented yet.");
+		clox_fatal("while_stmt is not implemented yet");
 		break;
 
 	case NT_BLOCK:
-		clox_fatal("statement blocks are not implemented yet.");
+		clox_fatal("statement blocks are not implemented yet");
 		break;
 	}
 
@@ -264,15 +302,15 @@ void chunk_xcompile(struct chunk *c, struct rdesc_node n)
 
 	switch (ralt_idx(n)) {
 	case 0:
-		clox_fatal("classes are not implemented yet.");
+		clox_fatal("classes are not implemented yet");
 		break;
 
 	case 1:
-		clox_fatal("functions are not implemented yet.");
+		clox_fatal("functions are not implemented yet");
 		break;
 
 	case 2:
-		clox_fatal("variables are not implemented yet.");
+		clox_fatal("variables are not implemented yet");
 		break;
 
 	case 3:
