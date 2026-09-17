@@ -27,6 +27,14 @@ void chunk_destroy(struct chunk *c)
 	fstack_destroy(&c->chunk);
 	fstack_destroy(&c->chunk_line_info);
 
+	for (size_t i = 0; i < fstack_len(&c->constants); i++) {
+		struct clox_value v;
+		v = *(struct clox_value *) fstack_at(&c->constants, i);
+
+		if (IS_OBJ(v))
+			obj_free(v);
+	}
+
 	fstack_destroy(&c->constants);
 }
 
@@ -72,7 +80,8 @@ void chunk_disassemble(struct chunk *c, FILE *out, size_t offset, size_t len)
 	size_t cli_index = 0;
 	size_t total_instructions = 0;
 	int prev_line = -1;
-	int line;
+	int line = -2;  /* no need to initialization, but due to false-positive
+			 * uninitialized variable warning I set to -2 */
 
 	for (size_t i = 0;
 	     (len == 0 || i < len) && offset + i < fstack_len(&c->chunk);) {

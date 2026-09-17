@@ -52,6 +52,8 @@ static bool values_equal(struct clox_value a, struct clox_value b)
 		return AS_BOOL(a) == AS_BOOL(b);
 	case VAL_NIL:
 		return true;
+	case VAL_OBJ:
+		return obj_is_equal(a, b);
 	}
 
 	return false; // unreachable;
@@ -70,6 +72,10 @@ static void print_val(struct clox_value v)
 
 	case VAL_NIL:
 		printf("nil\n");
+		break;
+
+	case VAL_OBJ:
+		obj_print(v);
 		break;
 	}
 }

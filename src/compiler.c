@@ -1,6 +1,5 @@
 #include "../include/chunk.h"
 #include "../include/clox.h"
-#include "../include/common.h"
 #include "../include/grammar.h"
 #include "../include/instructions.h"
 
@@ -183,13 +182,14 @@ static void compile_expression(struct chunk *c, struct rdesc_node n, int *line)
 					rseminfo(rchild(n, 0)))->seminfo.num));
 			break;
 
-		case 1:
-			clox_fatal("srings are not implemented yet");
-			/*
-			emit_op_const(STR_VAL(((struct seminfo *)
-					rseminfo(rchild(n, 0)))->seminfo.str));
-			*/
+		case 1: {
+			char *chars = ((struct seminfo *)
+					rseminfo(rchild(n, 0)))->seminfo.str;
+			struct obj_string *obj = obj_string_new(chars);
+
+			emit_op_const(OBJ_VAL((struct obj *) obj));
 			break;
+		}
 
 		case 2:
 			emit_byte(OP_TRUE);
