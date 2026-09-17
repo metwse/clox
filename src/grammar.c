@@ -12,37 +12,113 @@ const char *const tk_names[TK_COUNT] = {
 
 	"@IDENT", "@STR", "@NUM",
 
-	"and", "class", "else", "false", "fun", "if", "nil", "or",
+	"and", "class", "else", "false", "for", "fun", "if", "nil", "or",
 	"print", "return", "super", "this", "true", "var", "while",
 
 	"@eof", "@invalid"
 };
 
 const char *const nt_names[NT_COUNT] = {
-	"decl", "stmt",
-	"expression",
-	"equality", "equality-rest", "equality-op",
-	"comparison", "comparison-rest", "comparison-op",
-	"term", "term-rest", "term-op",
-	"factor", "factor-rest", "factor-op",
-	"unary", "unary-op",
-	"primary"
+	"decl",
+	"class_decl", "fun_decl", "var_decl",
+	"stmt",
+
+	"expr_stmt",
+	"for_stmt", "for_stmt_decl",
+	"if_stmt", "if_optelse_stmt",
+	"print_stmt",
+	"return_stmt",
+	"while_stmt",
+	"block", "block_decls",
+
+	"expression", "optexpression",
+	"equality", "equality_rest", "equality_op",
+	"comparison", "comparison_rest", "comparison_op",
+	"term", "term_rest", "term_op",
+	"factor", "factor_rest", "factor_op",
+	"unary", "unary_op",
+	"primary",
+
+	"class_decl_optinheritance", "class_decl_functions",
+	"var_decl_optasgn",
+	"function",
+	"function_params", "function_params_rest",
+	"function_args", "function_args_rest",
 };
 
 const struct rdesc_grammar_symbol production_rules
 	[NT_COUNT][NT_MAX_ALTERNATIVE_COUNT + 1][NT_MAX_ALTERNATIVE_SIZE + 1] = {
 /* <decl> ::= */ r(
-	NT(STMT)
+	NT(CLASS_DECL)
+alt	NT(FUN_DECL)
+alt	NT(VAR_DECL)
+alt	NT(STMT)
 ),
 
+/* <class-decl> ::= */ r(
+	TK(CLASS), TK(IDENT), NT(CLASS_DECL_OPTINHERITANCE),
+		TK(LBRACE), NT(CLASS_DECL_FUNCTIONS), TK(RBRACE)
+
+),
+/* <fun-decl> ::= */ r(
+	TK(FUN), NT(FUNCTION)
+),
+/* <var-decl> ::= */ r(
+	TK(VAR), TK(IDENT), NT(VAR_DECL_OPTASGN), TK(SEMI)
+),
 /* <stmt> ::= */ r(
+	NT(EXPR_STMT)
+alt	NT(FOR_STMT)
+alt	NT(IF_STMT)
+alt	NT(PRINT_STMT)
+alt	NT(RETURN_STMT)
+alt	NT(WHILE_STMT)
+alt	NT(BLOCK)
+),
+
+/* <expr-stmt> ::= */ r(
 	NT(EXPRESSION), TK(SEMI)
-alt	TK(PRINT), NT(EXPRESSION), TK(SEMI)
+),
+/* <for-stmt> ::= */ r(
+	TK(FOR), TK(LPAREN), NT(FOR_STMT_DECL),
+		NT(OPTEXPRESSION), TK(SEMI),
+		NT(OPTEXPRESSION), TK(SEMI), TK(RPAREN), NT(STMT)
+),
+/* <for-stmt-decl> ::= */ r(
+	NT(VAR_DECL)
+alt	NT(EXPR_STMT)
+alt	TK(SEMI)
+),
+/* <if-stmt> ::= */ r(
+	TK(IF), TK(LPAREN), NT(EXPRESSION), TK(RPAREN), NT(STMT),
+		NT(IF_OPTELSE_STMT)
+),
+/* <if-optelse-stmt> ::= */ r(
+	TK(ELSE), NT(STMT)
+alt	EPSILON
+),
+/* <print-stmt> ::= */ r(
+	TK(PRINT), NT(EXPRESSION), TK(SEMI)
+),
+/* <return-stmt> ::= */ r(
+	TK(RETURN), NT(OPTEXPRESSION), TK(SEMI)
+),
+/* <while-stmt> ::= */ r(
+	TK(WHILE), TK(LPAREN), NT(EXPRESSION), TK(RPAREN), NT(STMT)
+),
+/* <block> ::= */ r(
+	TK(LBRACE), NT(BLOCK_DECLS), TK(RBRACE)
+),
+/* <block-decls> ::= */ r(
+	NT(DECL), NT(BLOCK_DECLS)
+alt	EPSILON
 ),
 
 /* <expression> ::= */ r(
 	NT(EQUALITY)
 ),
+/* <optexpression> ::= */
+	ropt(NT(EXPRESSION)),
 
 /* <equality> ::= */
 	rrr(EQUALITY, (NT(COMPARISON)), (NT(EQUALITY_OP), NT(COMPARISON))),
@@ -90,7 +166,23 @@ alt	TK(TRUE)
 alt	TK(FALSE)
 alt	TK(NIL)
 alt	TK(LPAREN), NT(EXPRESSION), TK(RPAREN)
-)
+),
+
+/* <class-decl-optinheritance> ::= */
+	ropt(TK(GT), TK(IDENT)),
+/* <class-decl-functions> ::= */
+	ropt(NT(FUNCTION), NT(CLASS_DECL_FUNCTIONS)),
+
+/* <var-decl-optasgn> ::= */
+	ropt(TK(EQ), NT(EXPRESSION)),
+
+/* <function> ::= */ r(
+	TK(IDENT), TK(LPAREN), NT(FUNCTION_PARAMS), TK(RPAREN), NT(BLOCK)
+),
+/* <function-params> ::= */
+	rrr(FUNCTION_PARAMS, (TK(IDENT)), (TK(COMMA), TK(IDENT))),
+/* <function-args> ::= */
+	rrr(FUNCTION_ARGS, (NT(EXPRESSION)), (TK(COMMA), NT(EXPRESSION)))
 };
 
 void token_destroyer(uint16_t id, void *seminfo)

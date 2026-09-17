@@ -1,4 +1,5 @@
 #include "../include/chunk.h"
+#include "../include/common.h"
 #include "../include/grammar.h"
 #include "../include/instructions.h"
 #include "../include/value.h"
@@ -215,17 +216,41 @@ static void compile_expression(struct chunk *c, struct rdesc_node n, int *line)
 
 static void compile_stmt(struct chunk *c, struct rdesc_node n, int *line)
 {
-	switch (ralt_idx(n)) {
-	case 0:
+	n = rchild(n, 0);
+
+	switch (rid(n)) {
+	case NT_EXPR_STMT:
+		/* <expr> ; */
 		update_line(rchild(n, 1));
 		compile_expression(c, rchild(n, 0), line);
 		break;
 
-	case 1:
+	case NT_FOR_STMT:
+		clox_fatal("for_stmt is not implemented yet.");
+		break;
+
+	case NT_IF_STMT:
+		clox_fatal("if_stmt is not implemented yet.");
+		break;
+
+	case NT_PRINT_STMT:
+		/* print <expr> ; */
 		update_line(rchild(n, 0));
 		compile_expression(c, rchild(n, 1), line);
 		emit_byte(OP_PRINT);
 		update_line(rchild(n, 2));
+		break;
+
+	case NT_RETURN_STMT:
+		clox_fatal("return_stmt is not implemented yet.");
+		break;
+
+	case NT_WHILE_STMT:
+		clox_fatal("while_stmt is not implemented yet.");
+		break;
+
+	case NT_BLOCK:
+		clox_fatal("statement blocks are not implemented yet.");
 		break;
 	}
 
@@ -239,6 +264,18 @@ void chunk_xcompile(struct chunk *c, struct rdesc_node n)
 
 	switch (ralt_idx(n)) {
 	case 0:
+		clox_fatal("classes are not implemented yet.");
+		break;
+
+	case 1:
+		clox_fatal("functions are not implemented yet.");
+		break;
+
+	case 2:
+		clox_fatal("variables are not implemented yet.");
+		break;
+
+	case 3:
 		compile_stmt(c, rchild(n, 0), &line);
 		break;
 	}
