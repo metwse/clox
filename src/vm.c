@@ -1,7 +1,7 @@
-#include "../include/clox.h"
 #include "../include/chunk.h"
 #include "../include/common.h"
 #include "../include/instructions.h"
+#include "../include/value.h"
 #include "../include/vm.h"
 
 #include "../vendor/libfun/include/stack.h"
@@ -9,16 +9,23 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 
 void vm_xinit(struct vm *vm)
 {
-	fstack_xinit(&vm->stack, sizeof(struct clox_value));
+	fstack_xinit(&vm->stack, sizeof(struct val));
+	fstack_xinit(&vm->objects, sizeof(struct obj *));
 }
 
 void vm_destroy(struct vm *vm)
 {
 	fstack_destroy(&vm->stack);
+
+	for (size_t i = 0; i < fstack_len(&vm->objects); i++)
+		obj_free(*(struct obj **) fstack_at(&vm->objects, i));
+
+	fstack_destroy(&vm->objects);
 }
 
 void vm_set_chunk(struct vm *vm, const struct chunk *c)
@@ -27,20 +34,25 @@ void vm_set_chunk(struct vm *vm, const struct chunk *c)
 	vm->pc = 0;
 }
 
-static void xpush(struct vm *vm, struct clox_value *v) {
+void vm_obj_track(struct vm *vm, struct obj *o)
+{
+	fstack_xpush(&vm->objects, &o);
+}
+
+static void xpush(struct vm *vm, struct val *v) {
 	fstack_xpush(&vm->stack, v);
 }
 
-static struct clox_value pop(struct vm *vm) {
-	return *(struct clox_value *) fstack_pop(&vm->stack);
+static struct val pop(struct vm *vm) {
+	return *(struct val *) fstack_pop(&vm->stack);
 }
 
-static struct clox_value peek(struct vm *vm, size_t distance) {
-	return *(struct clox_value *) fstack_at(&vm->stack,
-						fstack_len(&vm->stack) - distance - 1);
+static struct val peek(struct vm *vm, size_t distance) {
+	return *(struct val *) fstack_at(&vm->stack,
+					 fstack_len(&vm->stack) - distance - 1);
 }
 
-static bool values_equal(struct clox_value a, struct clox_value b)
+static bool values_equal(struct val a, struct val b)
 {
 	if (a.type != b.type)
 		return false;
@@ -53,13 +65,13 @@ static bool values_equal(struct clox_value a, struct clox_value b)
 	case VAL_NIL:
 		return true;
 	case VAL_OBJ:
-		return obj_is_equal(a, b);
+		return obj_is_equal(AS_OBJ(a), AS_OBJ(b));
 	}
 
 	return false; // unreachable;
 }
 
-static void print_val(struct clox_value v)
+static void print_val(struct val v)
 {
 	switch (v.type) {
 	case VAL_NUM:
@@ -75,12 +87,12 @@ static void print_val(struct clox_value v)
 		break;
 
 	case VAL_OBJ:
-		obj_print(v);
+		obj_print(AS_OBJ(v));
 		break;
 	}
 }
 
-static bool is_falsey(struct clox_value v)
+static bool is_falsey(struct val v)
 {
 	return IS_NIL(v) || (IS_BOOL(v) && !AS_BOOL(v));
 }
@@ -126,20 +138,32 @@ int vm_run(struct vm *vm)
 			constant_index_init = true;
 
 		// fallthrough
-		case OP_CONSTANT_LONG:
+		case OP_CONSTANT_LONG: {
 			if (!constant_index_init)
 				constant_index = inst_get_u24_arg(inst, 0);
 
-			xpush(vm, fstack_at(&c->constants, constant_index));
+			struct val v = *(struct val *) fstack_at(&c->constants,
+								 constant_index);
+
+			if (IS_OBJ(v)) {
+				struct obj *new_obj = obj_clone(AS_OBJ(v));
+				vm_obj_track(vm, new_obj);
+
+				xpush(vm, &OBJ_VAL(new_obj));
+			} else {
+				xpush(vm, &v);
+			}
+
 			break;
+		}
 
 		case OP_NIL: xpush(vm, &NIL_VAL); break;
 		case OP_TRUE: xpush(vm, &BOOL_VAL(true)); break;
 		case OP_FALSE: xpush(vm, &BOOL_VAL(false)); break;
 
 		case OP_EQUAL: {
-			struct clox_value b = pop(vm);
-			struct clox_value a = pop(vm);
+			struct val b = pop(vm);
+			struct val a = pop(vm);
 
 			xpush(vm, &BOOL_VAL(values_equal(a, b)));
 			break;

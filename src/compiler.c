@@ -1,12 +1,13 @@
 #include "../include/chunk.h"
-#include "../include/clox.h"
 #include "../include/grammar.h"
 #include "../include/instructions.h"
+#include "../include/value.h"
 
 #include "../vendor/rdesc/include/cst_macros.h"
 #include "../vendor/rdesc/include/util.h"
 
 #include <stdint.h>
+#include <string.h>
 
 
 #define emit_byte(opcode) \
@@ -185,7 +186,8 @@ static void compile_expression(struct chunk *c, struct rdesc_node n, int *line)
 		case 1: {
 			char *chars = ((struct seminfo *)
 					rseminfo(rchild(n, 0)))->seminfo.str;
-			struct obj_string *obj = obj_string_new(chars);
+			struct obj_string *obj = obj_string_new(chars,
+								strlen(chars));
 
 			emit_op_const(OBJ_VAL((struct obj *) obj));
 			break;

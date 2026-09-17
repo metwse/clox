@@ -1,22 +1,51 @@
-#include "../include/clox.h"
 #include "../include/common.h"
 #include "../include/object.h"
 
+#include <stdbool.h>
+#include <stddef.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 
 
-void obj_print(struct clox_value v)
+void obj_free(struct obj *o)
 {
-	switch (OBJ_TYPE(v)) {
+	switch (OBJ_TYPE(o)) {
+	case OBJ_STRING: {
+		free(AS_CSTRING(o));
+		break;
+	}
+	}
+
+	free(o);
+}
+
+struct obj *obj_clone(const struct obj *o)
+{
+	switch (OBJ_TYPE(o)) {
+	case OBJ_STRING: {
+		size_t len = AS_STRING(o)->len;
+		char *chars = malloc(len + 1);
+
+		strncpy(chars, AS_CSTRING(o), len + 1);
+
+		return (struct obj *) obj_string_new(chars, len);
+	}
+	}
+
+	return NULL;  // unreachable
+}
+
+void obj_print(const struct obj *o)
+{
+	switch (OBJ_TYPE(o)) {
 	case OBJ_STRING:
-		printf("%s\n", AS_CSTRING(v));
+		printf("%s\n", AS_CSTRING(o));
 		break;
 	}
 }
 
-bool obj_is_equal(struct clox_value a, struct clox_value b)
+bool obj_is_equal(const struct obj *a, const struct obj *b)
 {
 	if (OBJ_TYPE(a) != OBJ_TYPE(b))
 		return false;
@@ -35,26 +64,14 @@ bool obj_is_equal(struct clox_value a, struct clox_value b)
 	return false;  // unreachable
 }
 
-void obj_free(struct clox_value v)
-{
-	switch (OBJ_TYPE(v)) {
-	case OBJ_STRING: {
-		free(AS_CSTRING(v));
-		break;
-	}
-	}
-
-	free(AS_OBJ(v));
-}
-
-struct obj_string *obj_string_new(char *chars)
+struct obj_string *obj_string_new(char *chars, size_t len)
 {
 	struct obj_string *obj = malloc(sizeof(struct obj_string));
 	clox_assert(obj, "cannot malloc");
 
 	*obj = (struct obj_string) {
 		.obj = { .type = OBJ_STRING },
-		.len = strlen(chars),
+		.len = len,
 		.chars = chars
 	};
 

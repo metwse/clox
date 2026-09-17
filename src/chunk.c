@@ -1,6 +1,6 @@
-#include "../include/clox.h"
-#include "../include/instructions.h"
 #include "../include/chunk.h"
+#include "../include/instructions.h"
+#include "../include/value.h"
 
 #include "../vendor/libfun/include/stack.h"
 
@@ -19,7 +19,7 @@ void chunk_xinit(struct chunk *c)
 	fstack_xinit(&c->chunk, 1);
 	fstack_xinit(&c->chunk_line_info, sizeof(struct chunk_line_info));
 
-	fstack_xinit(&c->constants, sizeof(struct clox_value));
+	fstack_xinit(&c->constants, sizeof(struct val));
 }
 
 void chunk_destroy(struct chunk *c)
@@ -28,11 +28,11 @@ void chunk_destroy(struct chunk *c)
 	fstack_destroy(&c->chunk_line_info);
 
 	for (size_t i = 0; i < fstack_len(&c->constants); i++) {
-		struct clox_value v;
-		v = *(struct clox_value *) fstack_at(&c->constants, i);
+		struct val v;
+		v = *(struct val *) fstack_at(&c->constants, i);
 
 		if (IS_OBJ(v))
-			obj_free(v);
+			obj_free(AS_OBJ(v));
 	}
 
 	fstack_destroy(&c->constants);
@@ -113,7 +113,7 @@ struct inst chunk_read_inst(const struct chunk *c, size_t offset)
 	};
 }
 
-uint32_t chunk_xpush_constant(struct chunk *c, const struct clox_value *v)
+uint32_t chunk_xpush_constant(struct chunk *c, const struct val *v)
 {
 	uint32_t constant_id = fstack_len(&c->constants);
 

@@ -3,6 +3,7 @@
 
 #include "chunk.h"
 #include "common.h"
+#include "object.h"
 
 #include "../vendor/libfun/include/stack.h"
 
@@ -15,6 +16,7 @@ struct vm {
 	size_t pc;
 
 	struct fstack stack;
+	struct fstack objects;
 };
 
 
@@ -30,6 +32,9 @@ void vm_set_chunk(struct vm *, const struct chunk *);
 /* Set the chunk to be interpreted. Returns non-zero if a runtime error
  * occured. */
 int vm_run(struct vm *) _wur;
+
+/* Track an object for garbage collection. */
+void vm_obj_track(struct vm *, struct obj *);
 
 
 #endif

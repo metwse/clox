@@ -1,7 +1,7 @@
 #ifndef CHUNK_H
 #define CHUNK_H
 
-#include "clox.h"
+#include "value.h"
 #include "instructions.h"
 
 #include "../vendor/libfun/include/stack.h"
@@ -42,7 +42,7 @@ struct inst chunk_read_inst(const struct chunk *, size_t offset);
 void chunk_xcompile(struct chunk *, struct rdesc_node);
 
 /* Push a new constant. */
-uint32_t chunk_xpush_constant(struct chunk *, const struct clox_value *);
+uint32_t chunk_xpush_constant(struct chunk *, const struct val *);
 
 
 #endif
