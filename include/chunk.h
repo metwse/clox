@@ -32,6 +32,9 @@ void chunk_destroy(struct chunk *);
  * Use zero `len` for no limit. */
 void chunk_disassemble(struct chunk *, FILE *out, size_t offset, size_t len);
 
+/* Push arbitrary bytes. */
+void chunk_xwrite(struct chunk *c, int line, const char *chunk, size_t len);
+
 /* Push a new instruction. */
 void chunk_xwrite_inst(struct chunk *, int line, struct inst);
 

@@ -5,6 +5,7 @@
 #include "common.h"
 #include "object.h"
 
+#include "../vendor/libfun/include/hashmap.h"
 #include "../vendor/libfun/include/stack.h"
 
 #include <stddef.h>
@@ -17,6 +18,7 @@ struct vm {
 
 	struct fstack stack;
 	struct fstack objects;
+	struct fhashmap globals;
 };
 
 

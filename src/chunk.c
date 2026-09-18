@@ -38,7 +38,7 @@ void chunk_destroy(struct chunk *c)
 	fstack_destroy(&c->constants);
 }
 
-static void chunk_xwrite(struct chunk *c, int line, char *chunk, size_t len)
+void chunk_xwrite(struct chunk *c, int line, const char *chunk, size_t len)
 {
 	if (!len)
 		return;

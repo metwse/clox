@@ -10,9 +10,15 @@ size_t inst_arg_len(enum opcode op)
 {
 	switch (op) {
 	case OP_CONSTANT_LONG:
+	case OP_DEFINE_GLOBAL_LONG:
+	case OP_GET_GLOBAL_LONG:
+	case OP_SET_GLOBAL_LONG:
 		return 3;
 
 	case OP_CONSTANT:
+	case OP_DEFINE_GLOBAL:
+	case OP_GET_GLOBAL:
+	case OP_SET_GLOBAL:
 		return 1;
 
 	default:
@@ -34,10 +40,16 @@ void inst_print(struct inst inst, FILE *out, int line)
 
 	switch (inst.op) {
 	case OP_CONSTANT_LONG:
+	case OP_DEFINE_GLOBAL_LONG:
+	case OP_GET_GLOBAL_LONG:
+	case OP_SET_GLOBAL_LONG:
 		fprintf(out, "%"PRIu32, inst_get_u24_arg(inst, 0));
 		break;
 
 	case OP_CONSTANT:
+	case OP_DEFINE_GLOBAL:
+	case OP_GET_GLOBAL:
+	case OP_SET_GLOBAL:
 		fprintf(out, "%d", inst_get_u8_arg(inst, 0));
 		break;
 
@@ -48,7 +60,7 @@ void inst_print(struct inst inst, FILE *out, int line)
 	fprintf(out, "\n");
 }
 
-#define argbyte(n) (((char *) inst.args)[n])
+#define argbyte(n) (((uint8_t *) inst.args)[n])
 
 uint8_t inst_get_u8_arg(struct inst inst, size_t offset)
 {
@@ -57,7 +69,7 @@ uint8_t inst_get_u8_arg(struct inst inst, size_t offset)
 
 uint32_t inst_get_u24_arg(struct inst inst, size_t offset)
 {
-	return (uint32_t) argbyte(offset + 2) << 16 |
-		(uint32_t) argbyte(offset + 1) << 8 |
+	return (uint32_t) (argbyte(offset + 2) << 16) |
+		(uint32_t) (argbyte(offset + 1) << 8) |
 		(uint32_t) argbyte(offset);
 }

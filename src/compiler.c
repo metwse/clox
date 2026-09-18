@@ -7,38 +7,53 @@
 #include "../vendor/rdesc/include/cst_macros.h"
 #include "../vendor/rdesc/include/util.h"
 
+#include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
 
 
 #define emit_byte(opcode) \
-	chunk_xwrite_inst(c, *line, (struct inst) { .op = opcode })
+	chunk_xwrite(c, *line, (const char *) &(uint8_t) { opcode }, 1)
 
 #define emit_bytes(opcode, opcode2) do { \
 		emit_byte(opcode); emit_byte(opcode2); \
+	} while (0)
+
+#define emit_u8_or_u24(num) do { \
+		chunk_xwrite(c, *line, \
+			     (const char *) (num < 256 ? \
+						     &(uint8_t) { (uint8_t) num } : \
+						     &*(uint8_t[3]) { \
+							num & 255, \
+							(num >> 8) & 255, \
+							(num >> 16) & 255, \
+						     }), \
+			     num < 256 ? 1 : 3); \
+	} while (0)
+
+#define emit_const(v) do { \
+		uint32_t constant_id = chunk_xpush_constant(c, &v); \
+		emit_byte(constant_id < 256 ? OP_CONSTANT : OP_CONSTANT_LONG); \
+		emit_u8_or_u24(constant_id); \
 	} while (0)
 
 #define update_line(tk) do { \
 		*line = ((struct seminfo *) rseminfo(tk))->line; \
 	} while (0)
 
-#define emit_op_const(v) do { \
-		uint32_t constant_id = chunk_xpush_constant(c, &v); \
-		chunk_xwrite_inst(c, *line, \
-				 (struct inst) { \
-					.op = constant_id > 255 ? \
-						OP_CONSTANT_LONG : OP_CONSTANT, \
-					.args = constant_id < 255 ? \
-						&(uint8_t) { constant_id } : \
-						&*(uint8_t[]) { \
-							constant_id & 255, \
-							(constant_id >> 8) & 255, \
-							(constant_id >> 16) & 255, \
-						} \
-				 }); \
-	} while (0)
 
-static void compile_expression(struct chunk *c, struct rdesc_node n, int *line)
+#define SEMINFO(n) (((struct seminfo *) rseminfo(n))->seminfo)
+
+#define SEMINFO_NUM(n) (SEMINFO(n).num)
+
+#define SEMINFO_STR(n) (SEMINFO(n).str)
+
+#define SEMINFO_IDENT_ID(n) (SEMINFO(n).ident_id)
+
+static void compile_expression(struct chunk *c,
+			       struct rdesc_node n,
+			       int *line,
+			       bool is_lvalue)
 {
 	switch (rid(n)) {
 	/* the rrr rules that have a rrr child */
@@ -49,15 +64,18 @@ static void compile_expression(struct chunk *c, struct rdesc_node n, int *line)
 	case NT_TERM:
 		switch (ralt_idx(n)) {
 		case 0:
+			if (is_lvalue)/* TODO: rvalue error handling */
+				clox_fatal("expression is not assignable");
+
 			rdesc_flip_left(n, 2);
-			compile_expression(c, rchild(n, 0), line);
-			compile_expression(c, rchild(n, 2), line);
+			compile_expression(c, rchild(n, 0), line, is_lvalue);
+			compile_expression(c, rchild(n, 2), line, is_lvalue);
 
 			break;
 
 		case 1:
 			rdesc_flip_left(n, 0);
-			compile_expression(c, rchild(n, 0), line);
+			compile_expression(c, rchild(n, 0), line, is_lvalue);
 
 			break;
 		}
@@ -69,20 +87,22 @@ static void compile_expression(struct chunk *c, struct rdesc_node n, int *line)
 
 	switch (rid(n)) {
 	case NT_EXPRESSION:
-		compile_expression(c, rchild(n, 0), line);
+		compile_expression(c, rchild(n, 0), line, is_lvalue);
 		break;
 
 	case NT_ASGN:
 		rdesc_flip_left(n, 0);
 
-		compile_expression(c, rchild(n, 0), line);
-		compile_expression(c, rchild(n, 1), line);
+		is_lvalue = ralt_idx(rchild(n, 1)) == 0;
+
+		compile_expression(c, rchild(n, 1), line, false);
+		compile_expression(c, rchild(n, 0), line, is_lvalue);
 
 		break;
 
 	case NT_ASGN_OPTEQ:
 		if (ralt_idx(n) == 0)
-			clox_fatal("variables are not implemented yet");
+			compile_expression(c, rchild(n, 1), line, is_lvalue);
 		break;
 
 	case NT_LOGIC_OR:
@@ -143,8 +163,11 @@ static void compile_expression(struct chunk *c, struct rdesc_node n, int *line)
 	case NT_FACTOR:
 		switch (ralt_idx(n)) {
 		case 0:
-			compile_expression(c, rchild(n, 0), line);
-			compile_expression(c, rchild(n, 2), line);
+			if (is_lvalue)/* TODO: rvalue error handling */
+				clox_fatal("expression is not assignable");
+
+			compile_expression(c, rchild(n, 0), line, is_lvalue);
+			compile_expression(c, rchild(n, 2), line, is_lvalue);
 
 			switch (ralt_idx(rchild(n, 1))) {
 			case 0:
@@ -158,7 +181,7 @@ static void compile_expression(struct chunk *c, struct rdesc_node n, int *line)
 			break;
 
 		case 1:
-			compile_expression(c, rchild(n, 0), line);
+			compile_expression(c, rchild(n, 0), line, is_lvalue);
 
 			break;
 		}
@@ -167,7 +190,10 @@ static void compile_expression(struct chunk *c, struct rdesc_node n, int *line)
 	case NT_UNARY:
 		switch (ralt_idx(n)) {
 		case 0:
-			compile_expression(c, rchild(n, 1), line);
+			if (is_lvalue)/* TODO: rvalue error handling */
+				clox_fatal("expression is not assignable");
+
+			compile_expression(c, rchild(n, 1), line, is_lvalue);
 
 			if (ralt_idx(rchild(n, 0)) == 1)
 				emit_byte(OP_NEGATE);
@@ -177,18 +203,20 @@ static void compile_expression(struct chunk *c, struct rdesc_node n, int *line)
 			break;
 
 		case 1:
-			compile_expression(c, rchild(n, 0), line);
+			compile_expression(c, rchild(n, 0), line, is_lvalue);
 
 			break;
 		}
 		break;
 
 	case NT_CALL:
-		compile_expression(c, rchild(n, 0), line);
-		compile_expression(c, rchild(n, 1), line);
+		compile_expression(c, rchild(n, 0), line, is_lvalue);
+		compile_expression(c, rchild(n, 1), line, is_lvalue);
 		break;
 
 	case NT_CALL_OPTARGS_OR_GETATTR:
+		/* TODO: catch non-assignable, i.e. a() but not a().c.
+		 * rvalue if ends with a call */
 		switch (ralt_idx(n)) {
 		case 0:
 			clox_fatal("function calls are not implemented yet");
@@ -204,19 +232,20 @@ static void compile_expression(struct chunk *c, struct rdesc_node n, int *line)
 		break;
 
 	case NT_PRIMARY:
+		if (is_lvalue && ralt_idx(n) < 6) /* TODO: rvalue error handling */
+			clox_fatal("expression is not assignable");
+
 		switch (ralt_idx(n)) {
 		case 0:
-			emit_op_const(NUM_VAL(((struct seminfo *)
-					rseminfo(rchild(n, 0)))->seminfo.num));
+			emit_const(NUM_VAL(SEMINFO_NUM(rchild(n, 0))));
 			break;
 
 		case 1: {
-			char *chars = ((struct seminfo *)
-					rseminfo(rchild(n, 0)))->seminfo.str;
+			char *chars = SEMINFO_STR(rchild(n, 0));
 			struct obj_string *obj = obj_string_new(chars,
 								strlen(chars));
 
-			emit_op_const(OBJ_VAL((struct obj *) obj));
+			emit_const(OBJ_VAL((struct obj *) obj));
 			break;
 		}
 
@@ -233,7 +262,7 @@ static void compile_expression(struct chunk *c, struct rdesc_node n, int *line)
 			break;
 
 		case 5:
-			compile_expression(c, rchild(n, 1), line);
+			compile_expression(c, rchild(n, 1), line, is_lvalue);
 			break;
 
 		case 6:
@@ -244,12 +273,38 @@ static void compile_expression(struct chunk *c, struct rdesc_node n, int *line)
 			clox_fatal("attr inheritance is not implemented yet");
 			break;
 
-		case 8:
-			clox_fatal("variables are not implemented yet");
+		case 8: {
+			uint32_t ident_id = SEMINFO_IDENT_ID(rchild(n, 0));
+
+			if (is_lvalue)
+				emit_byte(ident_id < 256 ?
+						OP_SET_GLOBAL : OP_SET_GLOBAL_LONG);
+			else
+				emit_byte(ident_id < 256 ?
+						OP_GET_GLOBAL : OP_GET_GLOBAL_LONG);
+
+			emit_u8_or_u24(ident_id);
 			break;
+		}
 		}
 		break;
 	}
+}
+
+static void compile_var_decl(struct chunk *c, struct rdesc_node n, int *line)
+{
+	update_line(rchild(n, 0));
+	int ident_id = SEMINFO_IDENT_ID(rchild(n, 1));
+
+	struct rdesc_node optasgn = rchild(n, 2);
+	if (ralt_idx(optasgn) == 0) {
+		compile_expression(c, rchild(optasgn, 1), line, false);
+	} else {
+		emit_byte(OP_NIL);
+	}
+
+	emit_byte(ident_id < 256 ? OP_DEFINE_GLOBAL : OP_DEFINE_GLOBAL_LONG);
+	emit_u8_or_u24(ident_id);
 }
 
 static void compile_stmt(struct chunk *c, struct rdesc_node n, int *line)
@@ -260,7 +315,8 @@ static void compile_stmt(struct chunk *c, struct rdesc_node n, int *line)
 	case NT_EXPR_STMT:
 		/* <expr> ; */
 		update_line(rchild(n, 1));
-		compile_expression(c, rchild(n, 0), line);
+		compile_expression(c, rchild(n, 0), line, false);
+		emit_byte(OP_POP);  /* discard the expression result */
 		break;
 
 	case NT_FOR_STMT:
@@ -274,7 +330,7 @@ static void compile_stmt(struct chunk *c, struct rdesc_node n, int *line)
 	case NT_PRINT_STMT:
 		/* print <expr> ; */
 		update_line(rchild(n, 0));
-		compile_expression(c, rchild(n, 1), line);
+		compile_expression(c, rchild(n, 1), line, false);
 		emit_byte(OP_PRINT);
 		update_line(rchild(n, 2));
 		break;
@@ -291,15 +347,10 @@ static void compile_stmt(struct chunk *c, struct rdesc_node n, int *line)
 		clox_fatal("statement blocks are not implemented yet");
 		break;
 	}
-
-	emit_byte(OP_RETURN);
 }
 
-/* shall procide NT_DECL */
-void chunk_xcompile(struct chunk *c, struct rdesc_node n)
+static void compile_decl(struct chunk *c, struct rdesc_node n, int *line)
 {
-	int line = 0;
-
 	switch (ralt_idx(n)) {
 	case 0:
 		clox_fatal("classes are not implemented yet");
@@ -310,11 +361,20 @@ void chunk_xcompile(struct chunk *c, struct rdesc_node n)
 		break;
 
 	case 2:
-		clox_fatal("variables are not implemented yet");
+		compile_var_decl(c, rchild(n, 0), line);
 		break;
 
 	case 3:
-		compile_stmt(c, rchild(n, 0), &line);
+		compile_stmt(c, rchild(n, 0), line);
 		break;
 	}
+
+	emit_byte(OP_RETURN);
+}
+/* shall procide NT_DECL */
+void chunk_xcompile(struct chunk *c, struct rdesc_node n)
+{
+	int line = 0;
+
+	compile_decl(c, n, &line);
 }

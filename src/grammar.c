@@ -32,7 +32,7 @@ const char *const nt_names[NT_COUNT] = {
 	"block", "block_decls",
 
 	"expression", "optexpression",
-	"asgn", "asgn_rest",
+	"asgn", "asgn_opteq",
 	"logic_or", "logic_or_rest",
 	"logic_and", "logic_and_rest",
 	"equality", "equality_rest", "equality_op",

@@ -5,6 +5,7 @@
 #include "../include/vm.h"
 
 #include "../vendor/libfun/include/stack.h"
+#include "../vendor/libfun/include/hashmap.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -16,6 +17,7 @@ void vm_xinit(struct vm *vm)
 {
 	fstack_xinit(&vm->stack, sizeof(struct val));
 	fstack_xinit(&vm->objects, sizeof(struct obj *));
+	fhashmap_xinit(&vm->globals, sizeof(struct val));
 }
 
 void vm_destroy(struct vm *vm)
@@ -26,6 +28,7 @@ void vm_destroy(struct vm *vm)
 		obj_free(*(struct obj **) fstack_at(&vm->objects, i));
 
 	fstack_destroy(&vm->objects);
+	fhashmap_destroy(&vm->globals);
 }
 
 void vm_set_chunk(struct vm *vm, const struct chunk *c)
@@ -112,38 +115,42 @@ static bool is_falsey(struct val v)
 		xpush(vm, &val_type(a op b)); \
 	} while (0)
 
+#define get_u8_or_u24_arg(inst, offset) \
+	(inst_arg_len(inst.op) == 3 ? \
+	 	inst_get_u24_arg(inst, offset) : inst_get_u8_arg(inst, offset))
+
+#define read_and_increment_pc do { \
+		inst = chunk_read_inst(vm->current_chunk, vm->pc); \
+		vm->pc += 1 + inst_arg_len(inst.op); \
+	} while (0)
+
 int vm_run(struct vm *vm)
 {
 	while (true) {
-		struct inst inst = chunk_read_inst(vm->current_chunk, vm->pc);
+		struct inst inst;
+
+		read_and_increment_pc;
+
 		struct chunk *c = (struct chunk *) vm->current_chunk;
-
-		vm->pc += 1 + inst_arg_len(inst.op);
-
-		uint32_t constant_index;
-		bool constant_index_init = false;
 
 		switch (inst.op) {
 		case OP_RETURN:
 			return 0;
 
-		case OP_PRINT: {
+		case OP_PRINT:
 			print_val(pop(vm));
-
 			break;
-		}
+
+		case OP_POP:
+			pop(vm);
+			break;
 
 		case OP_CONSTANT:
-			constant_index = inst_get_u8_arg(inst, 0);
-			constant_index_init = true;
-
-		// fallthrough
 		case OP_CONSTANT_LONG: {
-			if (!constant_index_init)
-				constant_index = inst_get_u24_arg(inst, 0);
+			size_t constant_idx = get_u8_or_u24_arg(inst, 0);
 
 			struct val v = *(struct val *) fstack_at(&c->constants,
-								 constant_index);
+								 constant_idx);
 
 			if (IS_OBJ(v)) {
 				struct obj *new_obj = obj_clone(AS_OBJ(v));
@@ -154,6 +161,54 @@ int vm_run(struct vm *vm)
 				xpush(vm, &v);
 			}
 
+			break;
+		}
+
+		case OP_DEFINE_GLOBAL:
+		case OP_DEFINE_GLOBAL_LONG:
+		case OP_GET_GLOBAL:
+		case OP_GET_GLOBAL_LONG:
+		case OP_SET_GLOBAL:
+		case OP_SET_GLOBAL_LONG: {
+			uint32_t constant_id = get_u8_or_u24_arg(inst, 0);
+
+			struct val *current = fhashmap_get2(&vm->globals,
+							    &constant_id,
+							    sizeof(uint32_t));
+
+			switch (inst.op) {
+			case OP_DEFINE_GLOBAL:
+			case OP_DEFINE_GLOBAL_LONG:
+				if (current != NULL)
+					runtime_error("variable is already defined");
+
+				struct val v = pop(vm);
+				fhashmap_xinsert2(&vm->globals,
+						  &constant_id,
+						  (sizeof(uint32_t)),
+						  &v);
+
+				break;
+
+			case OP_GET_GLOBAL:
+			case OP_GET_GLOBAL_LONG:
+				if (current == NULL)
+					runtime_error("undefined variable");
+
+				xpush(vm, current);
+				break;
+
+			case OP_SET_GLOBAL:
+			case OP_SET_GLOBAL_LONG:
+				if (current == NULL)
+					runtime_error("undefined variable");
+				
+				*current = peek(vm, 0);
+				break;
+
+			default:
+				break;  // unreachable
+			}
 			break;
 		}
 

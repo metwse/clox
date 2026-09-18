@@ -11,9 +11,13 @@
 enum opcode {
 	OP_RETURN,
 	OP_PRINT,
+	OP_POP,
 
-	OP_CONSTANT,
-	OP_CONSTANT_LONG,
+	OP_CONSTANT, OP_CONSTANT_LONG,
+
+	OP_DEFINE_GLOBAL, OP_DEFINE_GLOBAL_LONG,
+	OP_GET_GLOBAL, OP_GET_GLOBAL_LONG,
+	OP_SET_GLOBAL, OP_SET_GLOBAL_LONG,
 
 	OP_NIL,
 	OP_TRUE,
@@ -34,21 +38,30 @@ enum opcode {
 	OP_NOT,
 };
 
-static const char *const opcode_names[] = {
+static const char *const opcode_names[LAST_OPCODE + 1] = {
 	"RETURN",
 	"PRINT",
-	"CONSTANT",
-	"CONSTANT_LONG",
+	"POP",
+
+	"CONSTANT", "CONSTANT_LONG",
+
+	"DEFINE_GLOBAL", "DEFINE_GLOBAL_LONG",
+	"GET_GLOBAL", "GET_GLOBAL_LONG",
+	"SET_GLOBAL", "SET_GLOBAL_LONG",
+
 	"NIL",
 	"TRUE",
 	"FALSE",
+
 	"EQUAL",
 	"GREATER",
 	"LESS",
+
 	"ADD",
 	"SUBSTRACT",
 	"MULTIPLY",
 	"DIVIDE",
+
 	"NEGATE",
 	"AND",
 	"OR",
