@@ -23,6 +23,12 @@
 		emit_inst_u8or24(OP_CONSTANT, constant_id); \
 	} while (0)
 
+#define emit_owned_const(v) do { \
+		uint32_t constant_id = chunk_xpush_constant(c, &v); \
+		emit_inst_u8or24(OP_CONSTANT_ONCE, constant_id); \
+	} while (0)
+
+
 #define overwrite_inst(offset, opcode, arguments) \
 	chunk_overwrite_inst(c, offset, \
 			    (struct inst) { .op = opcode, .args = (arguments) });
@@ -40,6 +46,9 @@
 		emit_inst_args(num < 256 ? \
 				opcode : opcode ## _LONG, \
 				(void *) arg_u8or24(num)); \
+	} while (0)
+#define emit_inst_u8(opcode, num) do { \
+		emit_inst_args(opcode, &(uint8_t) { num }); \
 	} while (0)
 
 #define update_line(tk) do { \
@@ -74,6 +83,9 @@ void compiler_begin_scope(struct compiler *);
 
 /* Deletes a scope. */
 void compiler_end_scope(struct compiler *, struct chunk *);
+
+/* End scope without local variable cleanup. */
+void compiler_end_scope_without_cleanup(struct compiler *);
 
 
 #endif

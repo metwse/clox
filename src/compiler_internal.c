@@ -17,8 +17,7 @@ void compiler_xinit(struct compiler *current)
 
 void compiler_destroy(struct compiler *current)
 {
-	clox_assert(fstack_len(&current->locals) == 0,
-		    "local stack should have 0 length");
+	clox_assert(current->scope_depth == 0, "variables are not cleaned");
 
 	fstack_destroy(&current->locals);
 }
@@ -58,5 +57,10 @@ void compiler_end_scope(struct compiler *current, struct chunk *c)
 		fstack_pop(&current->locals);
 		emit_inst(OP_POP);
 	}
+	current->scope_depth--;
+}
+
+void compiler_end_scope_without_cleanup(struct compiler *current)
+{
 	current->scope_depth--;
 }

@@ -1,8 +1,6 @@
 #ifndef VALUE_H
 #define VALUE_H
 
-#include "object.h"
-
 #include <stdbool.h>
 
 
@@ -19,6 +17,9 @@
 #define AS_NUM(v) (v.val.num)
 #define AS_BOOL(v) (v.val.boolean)
 #define AS_OBJ(v) (v.val.obj)
+
+
+struct obj;  /* defined in object.h */
 
 
 enum val_type {

@@ -14,6 +14,7 @@ enum opcode {
 	OP_POP,
 
 	OP_CONSTANT, OP_CONSTANT_LONG,
+	OP_CONSTANT_ONCE, OP_CONSTANT_ONCE_LONG,
 
 	OP_DEFINE_GLOBAL, OP_DEFINE_GLOBAL_LONG,
 	OP_GET_GLOBAL, OP_GET_GLOBAL_LONG,
@@ -23,6 +24,8 @@ enum opcode {
 
 	OP_JUMP, OP_JUMP_IF_FALSE,
 	OP_JUMP_BACK,
+
+	OP_CALL,
 
 	OP_NIL,
 	OP_TRUE,
@@ -49,6 +52,7 @@ static const char *const opcode_names[LAST_OPCODE + 1] = {
 	"POP",
 
 	"CONSTANT", "CONSTANT_LONG",
+	"CONSTANT_ONCE", "CONSTANT_ONCE_LONG",
 
 	"DEFINE_GLOBAL", "DEFINE_GLOBAL_LONG",
 	"GET_GLOBAL", "GET_GLOBAL_LONG",
@@ -58,6 +62,8 @@ static const char *const opcode_names[LAST_OPCODE + 1] = {
 
 	"JUMP", "JUMP_IF_FALSE",
 	"JUMP_BACK",
+
+	"CALL",
 
 	"NIL",
 	"TRUE",

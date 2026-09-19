@@ -10,6 +10,7 @@ size_t inst_arg_len(enum opcode op)
 {
 	switch (op) {
 	case OP_CONSTANT_LONG:
+	case OP_CONSTANT_ONCE_LONG:
 	case OP_DEFINE_GLOBAL_LONG:
 	case OP_GET_GLOBAL_LONG:
 	case OP_SET_GLOBAL_LONG:
@@ -21,11 +22,13 @@ size_t inst_arg_len(enum opcode op)
 		return 3;
 
 	case OP_CONSTANT:
+	case OP_CONSTANT_ONCE:
 	case OP_DEFINE_GLOBAL:
 	case OP_GET_GLOBAL:
 	case OP_SET_GLOBAL:
 	case OP_GET_LOCAL:
 	case OP_SET_LOCAL:
+	case OP_CALL:
 		return 1;
 
 	default:

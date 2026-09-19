@@ -2,8 +2,9 @@
 
 #include "../include/chunk.h"
 #include "../include/common.h"
-#include "../include/grammar.h"
 #include "../include/instructions.h"
+#include "../include/grammar.h"
+#include "../include/object.h"
 #include "../include/value.h"
 
 #include "../vendor/rdesc/include/cst_macros.h"
@@ -25,12 +26,15 @@
 
 
 static void compile_expression(struct chunk *, struct rdesc_node, struct compiler *, bool);
-static void compile_var_decl(struct chunk *, struct rdesc_node, struct compiler *);
+static void compile_args(struct chunk *, struct rdesc_node, struct compiler *, uint32_t *);
 static void compile_block(struct chunk *, struct rdesc_node, struct compiler *);
 static void compile_if_stmt(struct chunk *, struct rdesc_node, struct compiler *);
 static void compile_for_stmt(struct chunk *, struct rdesc_node, struct compiler *);
 static void compile_while_stmt(struct chunk *, struct rdesc_node, struct compiler *);
 static void compile_stmt(struct chunk *, struct rdesc_node, struct compiler *);
+static void compile_var_decl(struct chunk *, struct rdesc_node, struct compiler *);
+static void compile_function_decl(struct chunk *, struct rdesc_node, struct compiler *);
+static void compile_return_stmt(struct chunk *, struct rdesc_node, struct compiler *);
 static void compile_decl(struct chunk *, struct rdesc_node, struct compiler *);
 
 
@@ -199,14 +203,33 @@ static void compile_expression(struct chunk *c,
 		break;
 
 	case NT_CALL_OPTARGS_OR_GETATTR:
-		/* TODO: catch non-assignable, i.e. a() but not a().c.
-		 * rvalue if ends with a call */
 		switch (ralt_idx(n)) {
-		case 0:
-			clox_fatal("function calls are not implemented yet");
+		case 0: {
+			if (is_lvalue) /* TODO: rvalue error handling */
+				clox_fatal("expression is not assignable");
+
+			uint32_t arg_count = 0;
+
+			struct rdesc_node optargs = rchild(n, 1);
+			if (ralt_idx(optargs) == 0)
+				compile_args(c,
+					     rchild(optargs, 0),
+					     current,
+					     &arg_count);
+
+			if (arg_count > 255)
+				clox_fatal("too many arguments!");
+
+			emit_inst_u8(OP_CALL, arg_count);
+
+			compile_expression(c, rchild(n, 3), current, is_lvalue);
 			break;
+		}
 
 		case 1:
+			/* TODO: catch non-assignable, i.e. a() but not a().c.
+			 * rvalue if ends with a call */
+
 			clox_fatal("getattr is not implemented yet");
 			break;
 
@@ -279,6 +302,22 @@ static void compile_expression(struct chunk *c,
 	}
 }
 
+static void compile_args(struct chunk *c,
+			 struct rdesc_node n,
+			 struct compiler *current,
+			 uint32_t *arg_count)
+{
+	bool first = rid(n) == NT_FUNCTION_ARGS;
+	if (!first && ralt_idx(n) == 1)
+		return;
+
+	compile_args(c, rchild(n, first ? 1 : 2), current, arg_count);
+
+	compile_expression(c, rchild(n, first ? 0 : 1), current, false);
+
+	(*arg_count)++;
+}
+
 static void compile_var_decl(struct chunk *c,
 			     struct rdesc_node n,
 			     struct compiler *current)
@@ -304,13 +343,15 @@ static void compile_block(struct chunk *c,
 			  struct rdesc_node n,
 			  struct compiler *current)
 {
+	n = rchild(n, 1);
+
 	compiler_begin_scope(current);
 
-	do {
+	while (ralt_idx(n) == 0){
 		compile_decl(c, rchild(n, 0), current);
 
 		n = rchild(n, 1);
-	} while (ralt_idx(n) == 0);
+	}
 
 	compiler_end_scope(current, c);
 }
@@ -472,7 +513,9 @@ static void compile_stmt(struct chunk *c,
 		break;
 
 	case NT_RETURN_STMT:
-		clox_fatal("return_stmt is not implemented yet");
+		/* return <optexpr> ; */
+		update_line(rchild(n, 0));
+		compile_return_stmt(c, n, current);
 		break;
 
 	case NT_WHILE_STMT:
@@ -482,9 +525,91 @@ static void compile_stmt(struct chunk *c,
 		break;
 
 	case NT_BLOCK:
-		compile_block(c, rchild(n, 1), current);
+		compile_block(c, n, current);
 		break;
 	}
+}
+
+static void compile_function_decl(struct chunk *c,
+				  struct rdesc_node n,
+				  struct compiler *current)
+{
+	update_line(rchild(n, 0));
+	n = rchild(n, 1);
+
+	size_t arity = 0;
+
+	struct compiler enclosed;
+	compiler_xinit(&enclosed);
+
+	struct chunk new_chunk;
+	chunk_xinit(&new_chunk);
+
+	struct chunk *hold_c = c;
+	struct compiler *hold_compiler = current;
+
+	c = &new_chunk;
+	current = &enclosed;
+	compiler_begin_scope(&enclosed);
+
+	struct rdesc_node optparams = rchild(n, 2);
+	if (ralt_idx(optparams) == 0) {
+		rdesc_flip_left(optparams, 0);
+
+		struct rdesc_node params = rchild(optparams, 0);
+
+		while (true) {
+			bool last = ralt_idx(params) == 1;
+
+			uint32_t ident_id =
+				SEMINFO_IDENT_ID(rchild(params, last ? 0 : 2));
+
+			compiler_define_local(&enclosed, ident_id);
+			arity++;
+
+			if (last)
+				break;
+
+			params = rchild(params, 0);
+		}
+	}
+
+	compile_block(&new_chunk, rchild(n, 4), &enclosed);
+
+	emit_inst(OP_NIL);
+	emit_inst(OP_RETURN);
+
+	compiler_end_scope_without_cleanup(&enclosed);
+
+	c = hold_c;
+	current = hold_compiler;
+
+	/* chunk_disassemble(&new_chunk, stdout, 0, 0); */
+
+	uint32_t ident_id = SEMINFO_IDENT_ID(rchild(n, 1));
+
+	struct obj_function *fun = obj_function_new(new_chunk, ident_id, arity);
+
+	emit_owned_const(OBJ_VAL((struct obj *) fun));
+	emit_inst_u8or24(OP_DEFINE_GLOBAL, ident_id);
+
+	compiler_destroy(&enclosed);
+
+	n = rchild(n, 1);
+}
+
+static void compile_return_stmt(struct chunk *c,
+				struct rdesc_node n,
+				struct compiler *current)
+{
+	struct rdesc_node optexpr = rchild(n, 1);
+	if (ralt_idx(optexpr) == 0) {
+		compile_expression(c, rchild(optexpr, 0), current, false);
+	} else {
+		emit_inst(OP_NIL);
+	}
+
+	emit_inst(OP_RETURN);
 }
 
 static void compile_decl(struct chunk *c,
@@ -497,7 +622,7 @@ static void compile_decl(struct chunk *c,
 		break;
 
 	case 1:
-		clox_fatal("functions are not implemented yet");
+		compile_function_decl(c, rchild(n, 0), current);
 		break;
 
 	case 2:
@@ -518,6 +643,7 @@ void chunk_xcompile(struct chunk *c, struct rdesc_node n)
 	compiler_xinit(&current);
 
 	compile_decl(c, n, &current);
+	chunk_xwrite_inst(c, current.line, (struct inst) { .op = OP_NIL });
 	chunk_xwrite_inst(c, current.line, (struct inst) { .op = OP_RETURN });
 
 	compiler_destroy(&current);

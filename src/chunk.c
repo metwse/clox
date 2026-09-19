@@ -1,6 +1,7 @@
 #include "../include/chunk.h"
 #include "../include/instructions.h"
 #include "../include/value.h"
+#include "../include/object.h"
 
 #include "../vendor/libfun/include/stack.h"
 
@@ -32,7 +33,7 @@ void chunk_destroy(struct chunk *c)
 		struct val v;
 		v = *(struct val *) fstack_at(&c->constants, i);
 
-		if (IS_OBJ(v))
+		if (IS_OBJ(v) && AS_OBJ(v) != NULL)
 			obj_free(AS_OBJ(v));
 	}
 

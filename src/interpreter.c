@@ -81,10 +81,9 @@ int interpreter_run(struct interpreter *i, const char *source)
 
 			chunk_xcompile(&chunk, rdesc_get_root(&i->parser));
 
-			chunk_disassemble(&chunk, stderr, 0, 0);
+			/* chunk_disassemble(&chunk, stderr, 0, 0); */
 
-			vm_set_chunk(&i->vm, &chunk);
-			if (vm_run(&i->vm))
+			if (vm_execute(&i->vm, &chunk))
 				clox_report("execution interrupted due to a "
 					    "runtime error");
 

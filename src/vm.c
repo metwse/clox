@@ -7,7 +7,9 @@
 #include "../vendor/libfun/include/stack.h"
 #include "../vendor/libfun/include/hashmap.h"
 
+#include <inttypes.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -15,6 +17,7 @@
 
 void vm_xinit(struct vm *vm)
 {
+	fstack_xinit(&vm->frames, sizeof(struct call_frame));
 	fstack_xinit(&vm->stack, sizeof(struct val));
 	fstack_xinit(&vm->objects, sizeof(struct obj *));
 	fhashmap_xinit(&vm->globals, sizeof(struct val));
@@ -22,19 +25,14 @@ void vm_xinit(struct vm *vm)
 
 void vm_destroy(struct vm *vm)
 {
+	fstack_destroy(&vm->frames);
 	fstack_destroy(&vm->stack);
 
 	for (size_t i = 0; i < fstack_len(&vm->objects); i++)
-		obj_free(*(struct obj **) fstack_at(&vm->objects, i));
+		obj_free(*(struct obj **) fstack_at(&vm->objects, vm->current.fp + i));
 
 	fstack_destroy(&vm->objects);
 	fhashmap_destroy(&vm->globals);
-}
-
-void vm_set_chunk(struct vm *vm, const struct chunk *c)
-{
-	vm->current_chunk = c;
-	vm->pc = 0;
 }
 
 void vm_obj_track(struct vm *vm, struct obj *o)
@@ -100,12 +98,18 @@ static bool is_falsey(struct val v)
 	return IS_NIL(v) || (IS_BOOL(v) && !AS_BOOL(v)) || (IS_NUM(v) && !AS_NUM(v));
 }
 
-// TODO: query line info
+static bool is_callable(struct val v)
+{
+	return IS_OBJ(v) && IS_OBJ_TYPE(AS_OBJ(v), OBJ_FUNCTION);
+}
+
+/* TODO: query line info */
+static void recover_runtime_error(struct vm *vm);
 #define runtime_error(...) do { \
 		clox_report(__VA_ARGS__); \
 		recover_runtime_error(vm); \
 		return 1; \
-	} while (0);
+	} while (0)
 
 #define binary_op(val_type, op) do { \
 		if (!IS_NUM(peek(vm, 0)) || !IS_NUM(peek(vm, 1))) { \
@@ -121,28 +125,72 @@ static bool is_falsey(struct val v)
 	 	inst_get_u24_arg(inst, offset) : inst_get_u8_arg(inst, offset))
 
 #define read_and_increment_pc do { \
-		inst = chunk_read_inst(vm->current_chunk, vm->pc); \
-		vm->pc += 1 + inst_arg_len(inst.op); \
+		inst = chunk_read_inst(vm->current.c, vm->current.pc); \
+		vm->current.pc += 1 + inst_arg_len(inst.op); \
 	} while (0)
+
+static int call(struct vm *vm, struct obj_function *callable, uint32_t arity)
+{
+	if (arity != callable->arity) {
+		runtime_error("expected %"PRIu32 " arguments, got %"PRIu32,
+			      callable->arity, arity);
+	}
+
+	fstack_xpush(&vm->frames, &vm->current);
+
+	vm->current = (struct call_frame) {
+		.c = &callable->chunk,
+		.fp = fstack_len(&vm->stack) - arity,
+		.pc = 0,
+		.arity = callable->arity
+	};
+
+	return 0;
+}
 
 static void recover_runtime_error(struct vm *vm)
 {
 	fstack_destroy(&vm->stack);
 	fstack_xinit(&vm->stack, sizeof(struct val));
+	/* TODO: continue from the previous function frame */
 }
 
-int vm_run(struct vm *vm)
+static int vm_run(struct vm *vm)
 {
 	while (true) {
 		struct inst inst;
 
 		read_and_increment_pc;
 
-		struct chunk *c = (struct chunk *) vm->current_chunk;
+		struct chunk *c = (struct chunk *) vm->current.c;
 
 		switch (inst.op) {
-		case OP_RETURN:
-			return 0;
+		case OP_RETURN: {
+			if (fstack_len(&vm->frames) == 0) {
+				print_val(pop(vm));
+
+				clox_assert(fstack_len(&vm->stack) == 0,
+					    "inconsistent stack");
+
+				return 0;
+			} else {
+				struct val res = pop(vm);
+
+				for (uint32_t arity = vm->current.arity;
+				     arity > 0;
+				     arity--) {
+					pop(vm);
+				}
+
+				pop(vm);  /* the callable */
+
+				xpush(vm, &res);
+
+				vm->current =
+					*(struct call_frame *) fstack_pop(&vm->frames);
+			}
+			break;
+		}
 
 		case OP_PRINT:
 			print_val(pop(vm));
@@ -153,17 +201,33 @@ int vm_run(struct vm *vm)
 			break;
 
 		case OP_CONSTANT:
-		case OP_CONSTANT_LONG: {
+		case OP_CONSTANT_LONG:
+		case OP_CONSTANT_ONCE:
+		case OP_CONSTANT_ONCE_LONG: {
 			size_t constant_idx = get_u8_or_u24_arg(inst, 0);
 
-			struct val v = *(struct val *) fstack_at(&c->constants,
-								 constant_idx);
+			struct val *v_ref =
+				(struct val *) fstack_at(&c->constants, constant_idx);
+			struct val v = *v_ref;
 
 			if (IS_OBJ(v)) {
-				struct obj *new_obj = obj_clone(AS_OBJ(v));
-				vm_obj_track(vm, new_obj);
+				if (inst.op == OP_CONSTANT_ONCE ||
+				    inst.op == OP_CONSTANT_ONCE_LONG) {
+					if (AS_OBJ(v) == NULL)
+						runtime_error("once constant has "
+							      "alredy been consumed");
 
-				xpush(vm, &OBJ_VAL(new_obj));
+					/* transfer the ownership of the object */
+					v_ref->val.obj = NULL;
+					vm_obj_track(vm, AS_OBJ(v));
+
+					xpush(vm, &OBJ_VAL(AS_OBJ(v)));
+				} else {
+					struct obj *new_obj = obj_clone(AS_OBJ(v));
+					vm_obj_track(vm, new_obj);
+
+					xpush(vm, &OBJ_VAL(new_obj));
+				}
 			} else {
 				xpush(vm, &v);
 			}
@@ -177,10 +241,10 @@ int vm_run(struct vm *vm)
 		case OP_GET_GLOBAL_LONG:
 		case OP_SET_GLOBAL:
 		case OP_SET_GLOBAL_LONG: {
-			uint32_t constant_id = get_u8_or_u24_arg(inst, 0);
+			uint32_t ident_id = get_u8_or_u24_arg(inst, 0);
 
 			struct val *current = fhashmap_get2(&vm->globals,
-							    &constant_id,
+							    &ident_id,
 							    sizeof(uint32_t));
 
 			switch (inst.op) {
@@ -191,7 +255,7 @@ int vm_run(struct vm *vm)
 
 				struct val v = pop(vm);
 				fhashmap_xinsert2(&vm->globals,
-						  &constant_id,
+						  &ident_id,
 						  (sizeof(uint32_t)),
 						  &v);
 
@@ -224,7 +288,7 @@ int vm_run(struct vm *vm)
 		case OP_SET_LOCAL:
 		case OP_SET_LOCAL_LONG: {
 			size_t slot = get_u8_or_u24_arg(inst, 0);
-			struct val *v = fstack_at(&vm->stack, slot);
+			struct val *v = fstack_at(&vm->stack, vm->current.fp + slot);
 
 
 			if (inst.op == OP_GET_LOCAL || inst.op == OP_GET_LOCAL_LONG)
@@ -240,10 +304,23 @@ int vm_run(struct vm *vm)
 			uint32_t jump = inst_get_u24_arg(inst, 0);
 
 			if (inst.op == OP_JUMP_BACK)
-				vm->pc -= jump + inst_arg_len(OP_JUMP_BACK) + 1;
+				vm->current.pc -= jump + inst_arg_len(OP_JUMP_BACK) + 1;
 			else if (inst.op == OP_JUMP ||
 			    is_falsey(peek(vm, 0)))
-				vm->pc += jump;
+				vm->current.pc += jump;
+
+			break;
+		}
+
+		case OP_CALL: {
+			uint32_t arg_count = inst_get_u8_arg(inst, 0);
+
+			struct val v = peek(vm, arg_count);
+			if (!is_callable(v))
+				runtime_error("expression result is not callable");
+
+			if (call(vm, AS_FUNCTION(AS_OBJ(v)), arg_count))
+				return 1;
 
 			break;
 		}
@@ -291,4 +368,16 @@ int vm_run(struct vm *vm)
 			break;
 		}
 	}
+}
+
+int vm_execute(struct vm *vm, const struct chunk *c)
+{
+	vm->current = (struct call_frame) {
+		.c = c,
+		.arity = 0,
+		.fp = 0,
+		.pc = 0
+	};
+
+	return vm_run(vm);
 }
