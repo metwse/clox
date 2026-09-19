@@ -234,6 +234,20 @@ int vm_run(struct vm *vm)
 			break;
 		}
 
+		case OP_JUMP:
+		case OP_JUMP_IF_FALSE:
+		case OP_JUMP_BACK: {
+			uint32_t jump = inst_get_u24_arg(inst, 0);
+
+			if (inst.op == OP_JUMP_BACK)
+				vm->pc -= jump;
+			else if (inst.op == OP_JUMP ||
+			    is_falsey(peek(vm, 0)))
+				vm->pc += jump;
+
+			break;
+		}
+
 		case OP_NIL: xpush(vm, &NIL_VAL); break;
 		case OP_TRUE: xpush(vm, &BOOL_VAL(true)); break;
 		case OP_FALSE: xpush(vm, &BOOL_VAL(false)); break;

@@ -15,6 +15,9 @@ size_t inst_arg_len(enum opcode op)
 	case OP_SET_GLOBAL_LONG:
 	case OP_GET_LOCAL_LONG:
 	case OP_SET_LOCAL_LONG:
+	case OP_JUMP:
+	case OP_JUMP_IF_FALSE:
+	case OP_JUMP_BACK:
 		return 3;
 
 	case OP_CONSTANT:
@@ -49,6 +52,8 @@ void inst_print(struct inst inst, FILE *out, int line)
 	case OP_SET_GLOBAL_LONG:
 	case OP_GET_LOCAL_LONG:
 	case OP_SET_LOCAL_LONG:
+	case OP_JUMP:
+	case OP_JUMP_IF_FALSE:
 		fprintf(out, "%"PRIu32, inst_get_u24_arg(inst, 0));
 		break;
 

@@ -62,12 +62,15 @@ int interpreter_run(struct interpreter *i, const char *source)
 	struct seminfo seminfo;
 
 	while (true) {
-		scanner_xnext(&i->scanner, &tk_id, &seminfo);
+		enum rdesc_result res;
+		if ((res = rdesc_resume(&i->parser)) == RDESC_CONTINUE) {
+			scanner_xnext(&i->scanner, &tk_id, &seminfo);
 
-		if (tk_id == TK_EOF)
-			break;
+			if (tk_id == TK_EOF)
+				break;
 
-		enum rdesc_result res = rdesc_pump(&i->parser, tk_id, &seminfo);
+			res = rdesc_pump(&i->parser, tk_id, &seminfo);
+		}
 
 		switch (res) {
 		case RDESC_CONTINUE:

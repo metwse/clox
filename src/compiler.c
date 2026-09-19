@@ -22,15 +22,17 @@
 		emit_byte(opcode); emit_byte(opcode2); \
 	} while (0)
 
+#define u32_to_vm_u24(num) ((uint8_t[3]) { \
+				(num) & 255, \
+				((num) >> 8) & 255, \
+				((num) >> 16) & 255, \
+			   })
+
 #define emit_u8_or_u24(num) do { \
 		chunk_xwrite(c, current->line, \
 			     (const char *) (num < 256 ? \
 						     &(uint8_t) { (uint8_t) num } : \
-						     &*(uint8_t[3]) { \
-							num & 255, \
-							(num >> 8) & 255, \
-							(num >> 16) & 255, \
-						     }), \
+						     &*u32_to_vm_u24(num)), \
 			     num < 256 ? 1 : 3); \
 	} while (0)
 
@@ -67,7 +69,7 @@ struct local {
 
 
 static void compile_decl(struct chunk *, struct rdesc_node, struct compiler *);
-
+static void compile_stmt(struct chunk *, struct rdesc_node, struct compiler *);
 
 static uint32_t resolve_local(struct compiler *current, uint32_t ident_id)
 {
@@ -389,6 +391,55 @@ static void compile_block(struct chunk *c,
 	current->scope_depth--;
 }
 
+static void compile_if_stmt(struct chunk *c,
+			    struct rdesc_node n,
+			    struct compiler *current)
+{
+	compile_expression(c, rchild(n, 2), current, false);
+
+	chunk_xwrite_inst(c, current->line, (struct inst) { .op = OP_JUMP_IF_FALSE, .args = NULL });
+	size_t if_inst = chunk_len(c) - inst_arg_len(OP_JUMP_IF_FALSE);
+
+	size_t then_start = chunk_len(c);
+
+	emit_byte(OP_POP);
+	compile_stmt(c, rchild(n, 4), current);
+
+	chunk_xwrite_inst(c, current->line, (struct inst) { .op = OP_JUMP, .args = NULL });
+	size_t else_inst = chunk_len(c) - inst_arg_len(OP_JUMP);
+
+	size_t else_start = chunk_len(c);
+
+	emit_byte(OP_POP);
+	size_t then_end = chunk_len(c);
+
+	struct rdesc_node else_n = rchild(n, 5);
+	if (ralt_idx(else_n) == 0) {
+		update_line(rchild(else_n, 0));
+		compile_stmt(c, rchild(else_n, 1), current);
+	}
+
+	size_t else_end = chunk_len(c);
+
+	chunk_override_inst(c, if_inst,
+			    (struct inst) {
+				.op = OP_JUMP_IF_FALSE,
+				.args = &*u32_to_vm_u24(then_end - then_start - 1)
+			    });
+
+	chunk_override_inst(c, else_inst,
+			    (struct inst) {
+				.op = OP_JUMP,
+				.args = &*u32_to_vm_u24(else_end - else_start)
+			    });
+}
+
+static void compile_for_stmt(struct chunk *c,
+			     struct rdesc_node n,
+			     struct compiler *current)
+{
+}
+
 static void compile_stmt(struct chunk *c,
 			 struct rdesc_node n,
 			 struct compiler *current)
@@ -408,7 +459,9 @@ static void compile_stmt(struct chunk *c,
 		break;
 
 	case NT_IF_STMT:
-		clox_fatal("if_stmt is not implemented yet");
+		/* if ( <expr> ) <stmt> <if_optelse_stmt> */
+		update_line(rchild(n, 0));
+		compile_if_stmt(c, n, current);
 		break;
 
 	case NT_PRINT_STMT:

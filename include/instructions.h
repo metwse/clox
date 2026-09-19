@@ -21,6 +21,9 @@ enum opcode {
 	OP_GET_LOCAL, OP_GET_LOCAL_LONG,
 	OP_SET_LOCAL, OP_SET_LOCAL_LONG,
 
+	OP_JUMP, OP_JUMP_IF_FALSE,
+	OP_JUMP_BACK,
+
 	OP_NIL,
 	OP_TRUE,
 	OP_FALSE,
@@ -52,6 +55,9 @@ static const char *const opcode_names[LAST_OPCODE + 1] = {
 	"SET_GLOBAL", "SET_GLOBAL_LONG",
 	"GET_LOCAL", "GET_LOCAL_LONG",
 	"SET_LOCAL", "SET_LOCAL_LONG",
+
+	"JUMP", "JUMP_IF_FALSE",
+	"JUMP_BACK",
 
 	"NIL",
 	"TRUE",

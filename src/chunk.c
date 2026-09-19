@@ -5,6 +5,7 @@
 #include "../vendor/libfun/include/stack.h"
 
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 
 
@@ -66,11 +67,35 @@ void chunk_xwrite(struct chunk *c, int line, const char *chunk, size_t len)
 			     });
 }
 
-void chunk_xwrite_inst(struct chunk *c, int line, struct inst ins)
+void chunk_xwrite_inst(struct chunk *c, int line, struct inst inst)
 {
-	chunk_xwrite(c, line, &(char) { ins.op }, 1);
-	chunk_xwrite(c, line, ins.args, inst_arg_len(ins.op));
+	chunk_xwrite(c, line, &(char) { inst.op }, 1);
+	size_t arg_len = inst_arg_len(inst.op);
+
+	if (inst.args != NULL) {
+		chunk_xwrite(c, line, inst.args, arg_len);
+	} else {
+		char dummy[arg_len];
+		chunk_xwrite(c, line, dummy, arg_len);
+	}
 }
+
+void chunk_override_inst(struct chunk *c, size_t offset, struct inst inst)
+{
+	*(uint8_t *) fstack_at(&c->chunk, offset) = inst.op;
+
+	if (inst.args != NULL) {
+		for (size_t i = 0; i < inst_arg_len(inst.op); i++)
+			*(uint8_t *) fstack_at(&c->chunk, offset + i) =
+				((uint8_t *) inst.args)[i];
+	}
+}
+
+size_t chunk_len(const struct chunk *c)
+{
+	return fstack_len(&c->chunk);
+}
+
 
 void chunk_disassemble(struct chunk *c, FILE *out, size_t offset, size_t len)
 {
@@ -94,9 +119,9 @@ void chunk_disassemble(struct chunk *c, FILE *out, size_t offset, size_t len)
 		}
 
 		struct inst ins = chunk_read_inst(c, offset + i);
+		fprintf(out, "%04zu ", offset + i);
 		i += 1 + inst_arg_len(ins.op);
 
-		fprintf(out, "%04zu ", offset + i);
 		inst_print(ins, out, prev_line == line ? -1 : line);
 
 		prev_line = line;

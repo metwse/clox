@@ -38,6 +38,12 @@ void chunk_xwrite(struct chunk *c, int line, const char *chunk, size_t len);
 /* Push a new instruction. */
 void chunk_xwrite_inst(struct chunk *, int line, struct inst);
 
+/* Override an instruction. */
+void chunk_override_inst(struct chunk *, size_t offset, struct inst);
+
+/* Returns the length of the chunk. */
+size_t chunk_len(const struct chunk *);
+
 /* Reads an instruction. */
 struct inst chunk_read_inst(const struct chunk *, size_t offset);
 
