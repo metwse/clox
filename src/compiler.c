@@ -29,6 +29,7 @@ static void compile_var_decl(struct chunk *, struct rdesc_node, struct compiler 
 static void compile_block(struct chunk *, struct rdesc_node, struct compiler *);
 static void compile_if_stmt(struct chunk *, struct rdesc_node, struct compiler *);
 static void compile_for_stmt(struct chunk *, struct rdesc_node, struct compiler *);
+static void compile_while_stmt(struct chunk *, struct rdesc_node, struct compiler *);
 static void compile_stmt(struct chunk *, struct rdesc_node, struct compiler *);
 static void compile_decl(struct chunk *, struct rdesc_node, struct compiler *);
 
@@ -409,6 +410,32 @@ static void compile_for_stmt(struct chunk *c,
 	compiler_end_scope(current, c);
 }
 
+static void compile_while_stmt(struct chunk *c,
+			       struct rdesc_node n,
+			       struct compiler *current)
+{
+	size_t condition_expr_start = chunk_len(c);
+
+	compile_expression(c, rchild(n, 2), current, false);  /* condition expr */
+
+	emit_inst(OP_JUMP_IF_FALSE);  /* to end of the for loop */
+	size_t break_inst = chunk_len(c) - inst_arg_len(OP_JUMP_IF_FALSE) - 1;
+	size_t while_body_start = chunk_len(c);
+	emit_inst(OP_POP);
+
+	compile_stmt(c, rchild(n, 4), current);
+
+	size_t before_continue = chunk_len(c);
+	emit_inst(OP_JUMP_BACK);  /* to the condition expr start */
+	size_t continue_inst = chunk_len(c) - inst_arg_len(OP_JUMP_BACK) - 1;
+
+	size_t while_body_end = chunk_len(c);
+	emit_inst(OP_POP);
+
+	overwrite_inst(break_inst, OP_JUMP_IF_FALSE, arg_u24(while_body_end - while_body_start));
+	overwrite_inst(continue_inst, OP_JUMP_BACK, arg_u24(before_continue - condition_expr_start));
+}
+
 static void compile_stmt(struct chunk *c,
 			 struct rdesc_node n,
 			 struct compiler *current)
@@ -449,7 +476,9 @@ static void compile_stmt(struct chunk *c,
 		break;
 
 	case NT_WHILE_STMT:
-		clox_fatal("while_stmt is not implemented yet");
+		/* while ( <expr> ) <stmt> */
+		update_line(rchild(n, 0));
+		compile_while_stmt(c, n, current);
 		break;
 
 	case NT_BLOCK:
