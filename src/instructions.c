@@ -54,6 +54,7 @@ void inst_print(struct inst inst, FILE *out, int line)
 	case OP_SET_LOCAL_LONG:
 	case OP_JUMP:
 	case OP_JUMP_IF_FALSE:
+	case OP_JUMP_BACK:
 		fprintf(out, "%"PRIu32, inst_get_u24_arg(inst, 0));
 		break;
 

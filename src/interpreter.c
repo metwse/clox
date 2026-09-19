@@ -58,7 +58,7 @@ int interpreter_run(struct interpreter *i, const char *source)
 
 	struct chunk chunk;
 
-	enum tk_id tk_id;
+	enum tk_id tk_id = TK_EOF;
 	struct seminfo seminfo;
 
 	while (true) {

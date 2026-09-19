@@ -240,7 +240,7 @@ int vm_run(struct vm *vm)
 			uint32_t jump = inst_get_u24_arg(inst, 0);
 
 			if (inst.op == OP_JUMP_BACK)
-				vm->pc -= jump;
+				vm->pc -= jump + inst_arg_len(OP_JUMP_BACK) + 1;
 			else if (inst.op == OP_JUMP ||
 			    is_falsey(peek(vm, 0)))
 				vm->pc += jump;

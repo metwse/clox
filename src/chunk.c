@@ -39,7 +39,7 @@ void chunk_destroy(struct chunk *c)
 	fstack_destroy(&c->constants);
 }
 
-void chunk_xwrite(struct chunk *c, int line, const char *chunk, size_t len)
+static void chunk_xwrite(struct chunk *c, int line, const char *chunk, size_t len)
 {
 	if (!len)
 		return;
@@ -80,13 +80,13 @@ void chunk_xwrite_inst(struct chunk *c, int line, struct inst inst)
 	}
 }
 
-void chunk_override_inst(struct chunk *c, size_t offset, struct inst inst)
+void chunk_overwrite_inst(struct chunk *c, size_t offset, struct inst inst)
 {
 	*(uint8_t *) fstack_at(&c->chunk, offset) = inst.op;
 
 	if (inst.args != NULL) {
 		for (size_t i = 0; i < inst_arg_len(inst.op); i++)
-			*(uint8_t *) fstack_at(&c->chunk, offset + i) =
+			*(uint8_t *) fstack_at(&c->chunk, offset + i + 1) =
 				((uint8_t *) inst.args)[i];
 	}
 }

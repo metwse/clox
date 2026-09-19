@@ -1,10 +1,10 @@
+#include "compiler_internal.h"
+
 #include "../include/chunk.h"
 #include "../include/common.h"
 #include "../include/grammar.h"
 #include "../include/instructions.h"
 #include "../include/value.h"
-
-#include "../vendor/libfun/include/stack.h"
 
 #include "../vendor/rdesc/include/cst_macros.h"
 #include "../vendor/rdesc/include/util.h"
@@ -13,38 +13,6 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
-
-
-#define emit_byte(opcode) \
-	chunk_xwrite(c, current->line, (const char *) &(uint8_t) { opcode }, 1)
-
-#define emit_bytes(opcode, opcode2) do { \
-		emit_byte(opcode); emit_byte(opcode2); \
-	} while (0)
-
-#define u32_to_vm_u24(num) ((uint8_t[3]) { \
-				(num) & 255, \
-				((num) >> 8) & 255, \
-				((num) >> 16) & 255, \
-			   })
-
-#define emit_u8_or_u24(num) do { \
-		chunk_xwrite(c, current->line, \
-			     (const char *) (num < 256 ? \
-						     &(uint8_t) { (uint8_t) num } : \
-						     &*u32_to_vm_u24(num)), \
-			     num < 256 ? 1 : 3); \
-	} while (0)
-
-#define emit_const(v) do { \
-		uint32_t constant_id = chunk_xpush_constant(c, &v); \
-		emit_byte(constant_id < 256 ? OP_CONSTANT : OP_CONSTANT_LONG); \
-		emit_u8_or_u24(constant_id); \
-	} while (0)
-
-#define update_line(tk) do { \
-		current->line = ((struct seminfo *) rseminfo(tk))->line; \
-	} while (0)
 
 
 #define SEMINFO(n) (((struct seminfo *) rseminfo(n))->seminfo)
@@ -56,31 +24,14 @@
 #define SEMINFO_IDENT_ID(n) (SEMINFO(n).ident_id)
 
 
-struct compiler {
-	int line;
-	struct fstack locals;
-	int scope_depth;
-};
-
-struct local {
-	uint32_t ident_id;
-	int depth;
-};
-
-
-static void compile_decl(struct chunk *, struct rdesc_node, struct compiler *);
+static void compile_expression(struct chunk *, struct rdesc_node, struct compiler *, bool);
+static void compile_var_decl(struct chunk *, struct rdesc_node, struct compiler *);
+static void compile_block(struct chunk *, struct rdesc_node, struct compiler *);
+static void compile_if_stmt(struct chunk *, struct rdesc_node, struct compiler *);
+static void compile_for_stmt(struct chunk *, struct rdesc_node, struct compiler *);
 static void compile_stmt(struct chunk *, struct rdesc_node, struct compiler *);
+static void compile_decl(struct chunk *, struct rdesc_node, struct compiler *);
 
-static uint32_t resolve_local(struct compiler *current, uint32_t ident_id)
-{
-	for (size_t i = fstack_len(&current->locals); i > 0; i--) {
-		struct local *var = fstack_at(&current->locals, i - 1);
-		if (var->ident_id == ident_id)
-			return i - 1;
-	}
-
-	return UINT_MAX;
-}
 
 static void compile_expression(struct chunk *c,
 			       struct rdesc_node n,
@@ -139,22 +90,22 @@ static void compile_expression(struct chunk *c,
 
 	case NT_LOGIC_OR:
 		if (ralt_idx(n) == 0)
-			emit_byte(OP_OR);
+			emit_inst(OP_OR);
 		break;
 
 	case NT_LOGIC_AND:
 		if (ralt_idx(n) == 0)
-			emit_byte(OP_AND);
+			emit_inst(OP_AND);
 		break;
 
 	case NT_EQUALITY:
 		if (ralt_idx(n) == 0) {
 			switch (ralt_idx(rchild(n, 1))) {
 			case 0:
-				emit_bytes(OP_EQUAL, OP_NOT);
+				emit_insts(OP_EQUAL, OP_NOT);
 				break;
 			case 1:
-				emit_byte(OP_EQUAL);
+				emit_inst(OP_EQUAL);
 				break;
 			}
 		}
@@ -164,16 +115,16 @@ static void compile_expression(struct chunk *c,
 		if (ralt_idx(n) == 0) {
 			switch (ralt_idx(rchild(n, 1))) {
 			case 0:
-				emit_byte(OP_GREATER);
+				emit_inst(OP_GREATER);
 				break;
 			case 1:
-				emit_bytes(OP_LESS, OP_NOT);
+				emit_insts(OP_LESS, OP_NOT);
 				break;
 			case 2:
-				emit_byte(OP_LESS);
+				emit_inst(OP_LESS);
 				break;
 			case 3:
-				emit_bytes(OP_GREATER, OP_NOT);
+				emit_insts(OP_GREATER, OP_NOT);
 				break;
 			}
 		}
@@ -183,10 +134,10 @@ static void compile_expression(struct chunk *c,
 		if (ralt_idx(n) == 0) {
 			switch (ralt_idx(rchild(n, 1))) {
 			case 0:
-				emit_byte(OP_SUBSTRACT);
+				emit_inst(OP_SUBSTRACT);
 				break;
 			case 1:
-				emit_byte(OP_ADD);
+				emit_inst(OP_ADD);
 				break;
 			}
 		}
@@ -203,10 +154,10 @@ static void compile_expression(struct chunk *c,
 
 			switch (ralt_idx(rchild(n, 1))) {
 			case 0:
-				emit_byte(OP_DIVIDE);
+				emit_inst(OP_DIVIDE);
 				break;
 			case 1:
-				emit_byte(OP_MULTIPLY);
+				emit_inst(OP_MULTIPLY);
 				break;
 			}
 
@@ -228,9 +179,9 @@ static void compile_expression(struct chunk *c,
 			compile_expression(c, rchild(n, 1), current, is_lvalue);
 
 			if (ralt_idx(rchild(n, 0)) == 1)
-				emit_byte(OP_NEGATE);
+				emit_inst(OP_NEGATE);
 			else if (ralt_idx(rchild(n, 0)) == 2)
-				emit_byte(OP_NOT);
+				emit_inst(OP_NOT);
 
 			break;
 
@@ -282,15 +233,15 @@ static void compile_expression(struct chunk *c,
 		}
 
 		case 2:
-			emit_byte(OP_TRUE);
+			emit_inst(OP_TRUE);
 			break;
 
 		case 3:
-			emit_byte(OP_FALSE);
+			emit_inst(OP_FALSE);
 			break;
 
 		case 4:
-			emit_byte(OP_NIL);
+			emit_inst(OP_NIL);
 			break;
 
 		case 5:
@@ -307,30 +258,18 @@ static void compile_expression(struct chunk *c,
 
 		case 8: {
 			uint32_t ident_id = SEMINFO_IDENT_ID(rchild(n, 0));
-			uint32_t local_slot = resolve_local(current, ident_id);
+			uint32_t local_slot = compiler_resolve_local(current, ident_id);
 
 			if (local_slot == UINT_MAX) {
 				if (is_lvalue)
-					emit_byte(ident_id < 256 ?
-							OP_SET_GLOBAL :
-							OP_SET_GLOBAL_LONG);
+					emit_inst_u8or24(OP_SET_GLOBAL, ident_id);
 				else
-					emit_byte(ident_id < 256 ?
-							OP_GET_GLOBAL :
-							OP_GET_GLOBAL_LONG);
-
-				emit_u8_or_u24(ident_id);
+					emit_inst_u8or24(OP_GET_GLOBAL, ident_id);
 			} else {
 				if (is_lvalue)
-					emit_byte(ident_id < 256 ?
-							OP_SET_LOCAL :
-							OP_SET_LOCAL_LONG);
+					emit_inst_u8or24(OP_SET_LOCAL, local_slot);
 				else
-					emit_byte(ident_id < 256 ?
-							OP_GET_LOCAL :
-							OP_GET_LOCAL_LONG);
-
-				emit_u8_or_u24(local_slot);
+					emit_inst_u8or24(OP_GET_LOCAL, local_slot);
 			}
 			break;
 		}
@@ -350,28 +289,21 @@ static void compile_var_decl(struct chunk *c,
 	if (ralt_idx(optasgn) == 0) {
 		compile_expression(c, rchild(optasgn, 1), current, false);
 	} else {
-		emit_byte(OP_NIL);
+		emit_inst(OP_NIL);
 	}
 
-	uint32_t local_slot = resolve_local(current, ident_id);
-	if (local_slot == UINT16_MAX || current->scope_depth == 0) {
-		emit_byte(ident_id < 256 ?
-				OP_DEFINE_GLOBAL : OP_DEFINE_GLOBAL_LONG);
-		emit_u8_or_u24(ident_id);
-	} else {
-		fstack_xpush(&current->locals,
-			     &(struct local) {
-				     .ident_id = ident_id,
-				     .depth = current->scope_depth
-			     });
-	}
+	uint32_t local_slot = compiler_resolve_local(current, ident_id);
+	if (local_slot == UINT16_MAX || current->scope_depth == 0)
+		emit_inst_u8or24(OP_DEFINE_GLOBAL, ident_id);
+	else
+		compiler_define_local(current, ident_id);
 }
 
 static void compile_block(struct chunk *c,
 			  struct rdesc_node n,
 			  struct compiler *current)
 {
-	current->scope_depth++;
+	compiler_begin_scope(current);
 
 	do {
 		compile_decl(c, rchild(n, 0), current);
@@ -379,16 +311,7 @@ static void compile_block(struct chunk *c,
 		n = rchild(n, 1);
 	} while (ralt_idx(n) == 0);
 
-	/* pop local variables */
-	struct local *local;
-	while (fstack_len(&current->locals) > 0 &&
-	       (local = fstack_top(&current->locals)) &&
-	       local->depth == current->scope_depth) {
-		fstack_pop(&current->locals);
-		emit_byte(OP_POP);
-	}
-
-	current->scope_depth--;
+	compiler_end_scope(current, c);
 }
 
 static void compile_if_stmt(struct chunk *c,
@@ -397,21 +320,21 @@ static void compile_if_stmt(struct chunk *c,
 {
 	compile_expression(c, rchild(n, 2), current, false);
 
-	chunk_xwrite_inst(c, current->line, (struct inst) { .op = OP_JUMP_IF_FALSE, .args = NULL });
-	size_t if_inst = chunk_len(c) - inst_arg_len(OP_JUMP_IF_FALSE);
+	emit_inst(OP_JUMP_IF_FALSE);
+	size_t if_inst = chunk_len(c) - inst_arg_len(OP_JUMP_IF_FALSE) - 1;
 
 	size_t then_start = chunk_len(c);
 
-	emit_byte(OP_POP);
+	emit_inst(OP_POP);
 	compile_stmt(c, rchild(n, 4), current);
 
-	chunk_xwrite_inst(c, current->line, (struct inst) { .op = OP_JUMP, .args = NULL });
-	size_t else_inst = chunk_len(c) - inst_arg_len(OP_JUMP);
+	emit_inst(OP_JUMP);
+	size_t else_inst = chunk_len(c) - inst_arg_len(OP_JUMP) - 1;
 
 	size_t else_start = chunk_len(c);
 
-	emit_byte(OP_POP);
 	size_t then_end = chunk_len(c);
+	emit_inst(OP_POP);
 
 	struct rdesc_node else_n = rchild(n, 5);
 	if (ralt_idx(else_n) == 0) {
@@ -421,23 +344,69 @@ static void compile_if_stmt(struct chunk *c,
 
 	size_t else_end = chunk_len(c);
 
-	chunk_override_inst(c, if_inst,
-			    (struct inst) {
-				.op = OP_JUMP_IF_FALSE,
-				.args = &*u32_to_vm_u24(then_end - then_start - 1)
-			    });
-
-	chunk_override_inst(c, else_inst,
-			    (struct inst) {
-				.op = OP_JUMP,
-				.args = &*u32_to_vm_u24(else_end - else_start)
-			    });
+	overwrite_inst(if_inst, OP_JUMP_IF_FALSE, arg_u24(then_end - then_start));
+	overwrite_inst(else_inst, OP_JUMP, arg_u24(else_end - else_start));
 }
 
 static void compile_for_stmt(struct chunk *c,
 			     struct rdesc_node n,
 			     struct compiler *current)
 {
+	compiler_begin_scope(current);
+
+	struct rdesc_node for_stmt_decl = rchild(n, 2);
+	switch (ralt_idx(for_stmt_decl)) {
+	case 0:
+		compile_var_decl(c, rchild(for_stmt_decl, 0), current);
+		break;
+
+	case 1:
+		compile_expression(c, rchild(rchild(for_stmt_decl, 0), 0), current, false);
+		emit_inst(OP_POP);  /* discard the expression result */
+		break;
+
+	default:
+		break;
+	}
+
+	size_t condition_expr_start = chunk_len(c);
+
+	struct rdesc_node condition_optexpr = rchild(n, 3);
+	if (ralt_idx(condition_optexpr) == 0)
+		compile_expression(c,
+				   rchild(condition_optexpr, 0),
+				   current,
+				   false);
+	else
+		emit_inst(OP_TRUE);
+
+	emit_inst(OP_JUMP_IF_FALSE);  /* to end of the for loop */
+	size_t break_inst = chunk_len(c) - inst_arg_len(OP_JUMP_IF_FALSE) - 1;
+	size_t for_body_start = chunk_len(c);
+	emit_inst(OP_POP);
+
+	compile_stmt(c, rchild(n, 7), current);
+
+	struct rdesc_node increment_optexpr = rchild(n, 5);
+	if (ralt_idx(increment_optexpr) == 0) {
+		compile_expression(c,
+				   rchild(increment_optexpr, 0),
+				   current,
+				   false);
+		emit_inst(OP_POP);
+	}
+
+	size_t before_continue = chunk_len(c);
+	emit_inst(OP_JUMP_BACK);  /* to the condition expr start */
+	size_t continue_inst = chunk_len(c) - inst_arg_len(OP_JUMP_BACK) - 1;
+
+	size_t for_body_end = chunk_len(c);
+	emit_inst(OP_POP);
+
+	overwrite_inst(break_inst, OP_JUMP_IF_FALSE, arg_u24(for_body_end - for_body_start));
+	overwrite_inst(continue_inst, OP_JUMP_BACK, arg_u24(before_continue - condition_expr_start));
+
+	compiler_end_scope(current, c);
 }
 
 static void compile_stmt(struct chunk *c,
@@ -451,11 +420,14 @@ static void compile_stmt(struct chunk *c,
 		/* <expr> ; */
 		update_line(rchild(n, 1));
 		compile_expression(c, rchild(n, 0), current, false);
-		emit_byte(OP_POP);  /* discard the expression result */
+		emit_inst(OP_POP);  /* discard the expression result */
 		break;
 
 	case NT_FOR_STMT:
-		clox_fatal("for_stmt is not implemented yet");
+		/* for ( <for_stmt_decl> <optexpression> ; <optexpression> )
+		 * <stmt> */
+		update_line(rchild(n, 0));
+		compile_for_stmt(c, n, current);
 		break;
 
 	case NT_IF_STMT:
@@ -468,7 +440,7 @@ static void compile_stmt(struct chunk *c,
 		/* print <expr> ; */
 		update_line(rchild(n, 0));
 		compile_expression(c, rchild(n, 1), current, false);
-		emit_byte(OP_PRINT);
+		emit_inst(OP_PRINT);
 		update_line(rchild(n, 2));
 		break;
 
@@ -514,16 +486,10 @@ void chunk_xcompile(struct chunk *c, struct rdesc_node n)
 {
 	struct compiler current;
 
-	current.line = 0;
-	current.scope_depth = 0;
-	fstack_xinit(&current.locals, sizeof(struct local));
+	compiler_xinit(&current);
 
 	compile_decl(c, n, &current);
-
 	chunk_xwrite_inst(c, current.line, (struct inst) { .op = OP_RETURN });
 
-	clox_assert(fstack_len(&current.locals) == 0,
-		    "local stack should have 0 length");
-
-	fstack_destroy(&current.locals);
+	compiler_destroy(&current);
 }

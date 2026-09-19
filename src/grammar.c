@@ -86,7 +86,7 @@ alt	NT(BLOCK)
 /* <for-stmt> ::= */ r(
 	TK(FOR), TK(LPAREN), NT(FOR_STMT_DECL),
 		NT(OPTEXPRESSION), TK(SEMI),
-		NT(OPTEXPRESSION), TK(SEMI), TK(RPAREN), NT(STMT)
+		NT(OPTEXPRESSION), TK(RPAREN), NT(STMT)
 ),
 /* <for-stmt-decl> ::= */ r(
 	NT(VAR_DECL)
