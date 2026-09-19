@@ -157,7 +157,7 @@ static void collect_ident_or_keyword(struct scanner *s,
 
 	size_t *ident_id = fhashmap_get2(&s->ident_id_map, start, ident_len);
 	if (ident_id == NULL) {
-		size_t new_ident_id = ++s->last_id;
+		uint32_t new_ident_id = ++s->last_id;
 
 		fhashmap_xinsert2(&s->ident_id_map,
 				  start,

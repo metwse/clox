@@ -103,6 +103,7 @@ static bool is_falsey(struct val v)
 // TODO: query line info
 #define runtime_error(...) do { \
 		clox_report(__VA_ARGS__); \
+		recover_runtime_error(vm); \
 		return 1; \
 	} while (0);
 
@@ -123,6 +124,12 @@ static bool is_falsey(struct val v)
 		inst = chunk_read_inst(vm->current_chunk, vm->pc); \
 		vm->pc += 1 + inst_arg_len(inst.op); \
 	} while (0)
+
+static void recover_runtime_error(struct vm *vm)
+{
+	fstack_destroy(&vm->stack);
+	fstack_xinit(&vm->stack, sizeof(struct val));
+}
 
 int vm_run(struct vm *vm)
 {
@@ -202,13 +209,28 @@ int vm_run(struct vm *vm)
 			case OP_SET_GLOBAL_LONG:
 				if (current == NULL)
 					runtime_error("undefined variable");
-				
+
 				*current = peek(vm, 0);
 				break;
 
 			default:
 				break;  // unreachable
 			}
+			break;
+		}
+
+		case OP_GET_LOCAL:
+		case OP_GET_LOCAL_LONG:
+		case OP_SET_LOCAL:
+		case OP_SET_LOCAL_LONG: {
+			size_t slot = get_u8_or_u24_arg(inst, 0);
+			struct val *v = fstack_at(&vm->stack, slot);
+
+
+			if (inst.op == OP_GET_LOCAL || inst.op == OP_GET_LOCAL_LONG)
+				xpush(vm, v);
+			else
+				*v = peek(vm, 0);
 			break;
 		}
 

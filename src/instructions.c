@@ -13,12 +13,16 @@ size_t inst_arg_len(enum opcode op)
 	case OP_DEFINE_GLOBAL_LONG:
 	case OP_GET_GLOBAL_LONG:
 	case OP_SET_GLOBAL_LONG:
+	case OP_GET_LOCAL_LONG:
+	case OP_SET_LOCAL_LONG:
 		return 3;
 
 	case OP_CONSTANT:
 	case OP_DEFINE_GLOBAL:
 	case OP_GET_GLOBAL:
 	case OP_SET_GLOBAL:
+	case OP_GET_LOCAL:
+	case OP_SET_LOCAL:
 		return 1;
 
 	default:
@@ -43,6 +47,8 @@ void inst_print(struct inst inst, FILE *out, int line)
 	case OP_DEFINE_GLOBAL_LONG:
 	case OP_GET_GLOBAL_LONG:
 	case OP_SET_GLOBAL_LONG:
+	case OP_GET_LOCAL_LONG:
+	case OP_SET_LOCAL_LONG:
 		fprintf(out, "%"PRIu32, inst_get_u24_arg(inst, 0));
 		break;
 
@@ -50,6 +56,8 @@ void inst_print(struct inst inst, FILE *out, int line)
 	case OP_DEFINE_GLOBAL:
 	case OP_GET_GLOBAL:
 	case OP_SET_GLOBAL:
+	case OP_GET_LOCAL:
+	case OP_SET_LOCAL:
 		fprintf(out, "%d", inst_get_u8_arg(inst, 0));
 		break;
 

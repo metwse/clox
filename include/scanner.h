@@ -17,7 +17,7 @@ struct scanner {
 	/* identifier id -> name map */
 	struct fstack ident_id_rev_map;
 
-	size_t last_id;
+	uint32_t last_id;
 
 	int line;
 	int col;

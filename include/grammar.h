@@ -65,7 +65,7 @@ enum nt_id {
 };
 
 union seminfo_data {
-	int ident_id;
+	uint32_t ident_id;
 	double num;
 	char *str;
 };

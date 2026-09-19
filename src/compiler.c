@@ -4,23 +4,26 @@
 #include "../include/instructions.h"
 #include "../include/value.h"
 
+#include "../vendor/libfun/include/stack.h"
+
 #include "../vendor/rdesc/include/cst_macros.h"
 #include "../vendor/rdesc/include/util.h"
 
+#include <limits.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
 
 
 #define emit_byte(opcode) \
-	chunk_xwrite(c, *line, (const char *) &(uint8_t) { opcode }, 1)
+	chunk_xwrite(c, current->line, (const char *) &(uint8_t) { opcode }, 1)
 
 #define emit_bytes(opcode, opcode2) do { \
 		emit_byte(opcode); emit_byte(opcode2); \
 	} while (0)
 
 #define emit_u8_or_u24(num) do { \
-		chunk_xwrite(c, *line, \
+		chunk_xwrite(c, current->line, \
 			     (const char *) (num < 256 ? \
 						     &(uint8_t) { (uint8_t) num } : \
 						     &*(uint8_t[3]) { \
@@ -38,7 +41,7 @@
 	} while (0)
 
 #define update_line(tk) do { \
-		*line = ((struct seminfo *) rseminfo(tk))->line; \
+		current->line = ((struct seminfo *) rseminfo(tk))->line; \
 	} while (0)
 
 
@@ -50,9 +53,36 @@
 
 #define SEMINFO_IDENT_ID(n) (SEMINFO(n).ident_id)
 
+
+struct compiler {
+	int line;
+	struct fstack locals;
+	int scope_depth;
+};
+
+struct local {
+	uint32_t ident_id;
+	int depth;
+};
+
+
+static void compile_decl(struct chunk *, struct rdesc_node, struct compiler *);
+
+
+static uint32_t resolve_local(struct compiler *current, uint32_t ident_id)
+{
+	for (size_t i = fstack_len(&current->locals); i > 0; i--) {
+		struct local *var = fstack_at(&current->locals, i - 1);
+		if (var->ident_id == ident_id)
+			return i - 1;
+	}
+
+	return UINT_MAX;
+}
+
 static void compile_expression(struct chunk *c,
 			       struct rdesc_node n,
-			       int *line,
+			       struct compiler *current,
 			       bool is_lvalue)
 {
 	switch (rid(n)) {
@@ -68,14 +98,14 @@ static void compile_expression(struct chunk *c,
 				clox_fatal("expression is not assignable");
 
 			rdesc_flip_left(n, 2);
-			compile_expression(c, rchild(n, 0), line, is_lvalue);
-			compile_expression(c, rchild(n, 2), line, is_lvalue);
+			compile_expression(c, rchild(n, 0), current, is_lvalue);
+			compile_expression(c, rchild(n, 2), current, is_lvalue);
 
 			break;
 
 		case 1:
 			rdesc_flip_left(n, 0);
-			compile_expression(c, rchild(n, 0), line, is_lvalue);
+			compile_expression(c, rchild(n, 0), current, is_lvalue);
 
 			break;
 		}
@@ -87,7 +117,7 @@ static void compile_expression(struct chunk *c,
 
 	switch (rid(n)) {
 	case NT_EXPRESSION:
-		compile_expression(c, rchild(n, 0), line, is_lvalue);
+		compile_expression(c, rchild(n, 0), current, is_lvalue);
 		break;
 
 	case NT_ASGN:
@@ -95,14 +125,14 @@ static void compile_expression(struct chunk *c,
 
 		is_lvalue = ralt_idx(rchild(n, 1)) == 0;
 
-		compile_expression(c, rchild(n, 1), line, false);
-		compile_expression(c, rchild(n, 0), line, is_lvalue);
+		compile_expression(c, rchild(n, 1), current, false);
+		compile_expression(c, rchild(n, 0), current, is_lvalue);
 
 		break;
 
 	case NT_ASGN_OPTEQ:
 		if (ralt_idx(n) == 0)
-			compile_expression(c, rchild(n, 1), line, is_lvalue);
+			compile_expression(c, rchild(n, 1), current, is_lvalue);
 		break;
 
 	case NT_LOGIC_OR:
@@ -166,8 +196,8 @@ static void compile_expression(struct chunk *c,
 			if (is_lvalue)/* TODO: rvalue error handling */
 				clox_fatal("expression is not assignable");
 
-			compile_expression(c, rchild(n, 0), line, is_lvalue);
-			compile_expression(c, rchild(n, 2), line, is_lvalue);
+			compile_expression(c, rchild(n, 0), current, is_lvalue);
+			compile_expression(c, rchild(n, 2), current, is_lvalue);
 
 			switch (ralt_idx(rchild(n, 1))) {
 			case 0:
@@ -181,7 +211,7 @@ static void compile_expression(struct chunk *c,
 			break;
 
 		case 1:
-			compile_expression(c, rchild(n, 0), line, is_lvalue);
+			compile_expression(c, rchild(n, 0), current, is_lvalue);
 
 			break;
 		}
@@ -193,7 +223,7 @@ static void compile_expression(struct chunk *c,
 			if (is_lvalue)/* TODO: rvalue error handling */
 				clox_fatal("expression is not assignable");
 
-			compile_expression(c, rchild(n, 1), line, is_lvalue);
+			compile_expression(c, rchild(n, 1), current, is_lvalue);
 
 			if (ralt_idx(rchild(n, 0)) == 1)
 				emit_byte(OP_NEGATE);
@@ -203,15 +233,15 @@ static void compile_expression(struct chunk *c,
 			break;
 
 		case 1:
-			compile_expression(c, rchild(n, 0), line, is_lvalue);
+			compile_expression(c, rchild(n, 0), current, is_lvalue);
 
 			break;
 		}
 		break;
 
 	case NT_CALL:
-		compile_expression(c, rchild(n, 0), line, is_lvalue);
-		compile_expression(c, rchild(n, 1), line, is_lvalue);
+		compile_expression(c, rchild(n, 0), current, is_lvalue);
+		compile_expression(c, rchild(n, 1), current, is_lvalue);
 		break;
 
 	case NT_CALL_OPTARGS_OR_GETATTR:
@@ -262,7 +292,7 @@ static void compile_expression(struct chunk *c,
 			break;
 
 		case 5:
-			compile_expression(c, rchild(n, 1), line, is_lvalue);
+			compile_expression(c, rchild(n, 1), current, is_lvalue);
 			break;
 
 		case 6:
@@ -275,15 +305,31 @@ static void compile_expression(struct chunk *c,
 
 		case 8: {
 			uint32_t ident_id = SEMINFO_IDENT_ID(rchild(n, 0));
+			uint32_t local_slot = resolve_local(current, ident_id);
 
-			if (is_lvalue)
-				emit_byte(ident_id < 256 ?
-						OP_SET_GLOBAL : OP_SET_GLOBAL_LONG);
-			else
-				emit_byte(ident_id < 256 ?
-						OP_GET_GLOBAL : OP_GET_GLOBAL_LONG);
+			if (local_slot == UINT_MAX) {
+				if (is_lvalue)
+					emit_byte(ident_id < 256 ?
+							OP_SET_GLOBAL :
+							OP_SET_GLOBAL_LONG);
+				else
+					emit_byte(ident_id < 256 ?
+							OP_GET_GLOBAL :
+							OP_GET_GLOBAL_LONG);
 
-			emit_u8_or_u24(ident_id);
+				emit_u8_or_u24(ident_id);
+			} else {
+				if (is_lvalue)
+					emit_byte(ident_id < 256 ?
+							OP_SET_LOCAL :
+							OP_SET_LOCAL_LONG);
+				else
+					emit_byte(ident_id < 256 ?
+							OP_GET_LOCAL :
+							OP_GET_LOCAL_LONG);
+
+				emit_u8_or_u24(local_slot);
+			}
 			break;
 		}
 		}
@@ -291,23 +337,61 @@ static void compile_expression(struct chunk *c,
 	}
 }
 
-static void compile_var_decl(struct chunk *c, struct rdesc_node n, int *line)
+static void compile_var_decl(struct chunk *c,
+			     struct rdesc_node n,
+			     struct compiler *current)
 {
 	update_line(rchild(n, 0));
-	int ident_id = SEMINFO_IDENT_ID(rchild(n, 1));
+	uint32_t ident_id = SEMINFO_IDENT_ID(rchild(n, 1));
 
 	struct rdesc_node optasgn = rchild(n, 2);
 	if (ralt_idx(optasgn) == 0) {
-		compile_expression(c, rchild(optasgn, 1), line, false);
+		compile_expression(c, rchild(optasgn, 1), current, false);
 	} else {
 		emit_byte(OP_NIL);
 	}
 
-	emit_byte(ident_id < 256 ? OP_DEFINE_GLOBAL : OP_DEFINE_GLOBAL_LONG);
-	emit_u8_or_u24(ident_id);
+	uint32_t local_slot = resolve_local(current, ident_id);
+	if (local_slot == UINT16_MAX || current->scope_depth == 0) {
+		emit_byte(ident_id < 256 ?
+				OP_DEFINE_GLOBAL : OP_DEFINE_GLOBAL_LONG);
+		emit_u8_or_u24(ident_id);
+	} else {
+		fstack_xpush(&current->locals,
+			     &(struct local) {
+				     .ident_id = ident_id,
+				     .depth = current->scope_depth
+			     });
+	}
 }
 
-static void compile_stmt(struct chunk *c, struct rdesc_node n, int *line)
+static void compile_block(struct chunk *c,
+			  struct rdesc_node n,
+			  struct compiler *current)
+{
+	current->scope_depth++;
+
+	do {
+		compile_decl(c, rchild(n, 0), current);
+
+		n = rchild(n, 1);
+	} while (ralt_idx(n) == 0);
+
+	/* pop local variables */
+	struct local *local;
+	while (fstack_len(&current->locals) > 0 &&
+	       (local = fstack_top(&current->locals)) &&
+	       local->depth == current->scope_depth) {
+		fstack_pop(&current->locals);
+		emit_byte(OP_POP);
+	}
+
+	current->scope_depth--;
+}
+
+static void compile_stmt(struct chunk *c,
+			 struct rdesc_node n,
+			 struct compiler *current)
 {
 	n = rchild(n, 0);
 
@@ -315,7 +399,7 @@ static void compile_stmt(struct chunk *c, struct rdesc_node n, int *line)
 	case NT_EXPR_STMT:
 		/* <expr> ; */
 		update_line(rchild(n, 1));
-		compile_expression(c, rchild(n, 0), line, false);
+		compile_expression(c, rchild(n, 0), current, false);
 		emit_byte(OP_POP);  /* discard the expression result */
 		break;
 
@@ -330,7 +414,7 @@ static void compile_stmt(struct chunk *c, struct rdesc_node n, int *line)
 	case NT_PRINT_STMT:
 		/* print <expr> ; */
 		update_line(rchild(n, 0));
-		compile_expression(c, rchild(n, 1), line, false);
+		compile_expression(c, rchild(n, 1), current, false);
 		emit_byte(OP_PRINT);
 		update_line(rchild(n, 2));
 		break;
@@ -344,12 +428,14 @@ static void compile_stmt(struct chunk *c, struct rdesc_node n, int *line)
 		break;
 
 	case NT_BLOCK:
-		clox_fatal("statement blocks are not implemented yet");
+		compile_block(c, rchild(n, 1), current);
 		break;
 	}
 }
 
-static void compile_decl(struct chunk *c, struct rdesc_node n, int *line)
+static void compile_decl(struct chunk *c,
+			 struct rdesc_node n,
+			 struct compiler *current)
 {
 	switch (ralt_idx(n)) {
 	case 0:
@@ -361,20 +447,30 @@ static void compile_decl(struct chunk *c, struct rdesc_node n, int *line)
 		break;
 
 	case 2:
-		compile_var_decl(c, rchild(n, 0), line);
+		compile_var_decl(c, rchild(n, 0), current);
 		break;
 
 	case 3:
-		compile_stmt(c, rchild(n, 0), line);
+		compile_stmt(c, rchild(n, 0), current);
 		break;
 	}
-
-	emit_byte(OP_RETURN);
 }
+
 /* shall procide NT_DECL */
 void chunk_xcompile(struct chunk *c, struct rdesc_node n)
 {
-	int line = 0;
+	struct compiler current;
 
-	compile_decl(c, n, &line);
+	current.line = 0;
+	current.scope_depth = 0;
+	fstack_xinit(&current.locals, sizeof(struct local));
+
+	compile_decl(c, n, &current);
+
+	chunk_xwrite_inst(c, current.line, (struct inst) { .op = OP_RETURN });
+
+	clox_assert(fstack_len(&current.locals) == 0,
+		    "local stack should have 0 length");
+
+	fstack_destroy(&current.locals);
 }
