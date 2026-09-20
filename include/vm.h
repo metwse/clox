@@ -11,6 +11,7 @@
 
 
 struct call_frame {
+	struct obj_closure *closure;
 	const struct chunk *c;  /* current chunk */
 	size_t arity;  /* number of arguments */
 	size_t pc;  /* program counter */
@@ -24,6 +25,7 @@ struct vm {
 	struct fstack stack;
 	struct fstack objects;
 	struct fhashmap globals;
+	struct obj_upvalue *open_upvalues;
 };
 
 

@@ -22,8 +22,8 @@ struct chunk {
 };
 
 
-/* Initialize a new chunk. */
-void chunk_xinit(struct chunk *);
+/* Compile a parse tree. */
+struct chunk chunk_xcompile(struct rdesc_node);
 
 /* Free the resources owned by the chunk. */
 void chunk_destroy(struct chunk *);
@@ -43,9 +43,6 @@ size_t chunk_len(const struct chunk *);
 
 /* Reads an instruction. */
 struct inst chunk_read_inst(const struct chunk *, size_t offset);
-
-/* Compile a parse tree. */
-void chunk_xcompile(struct chunk *, struct rdesc_node);
 
 /* Push a new constant. */
 uint32_t chunk_xpush_constant(struct chunk *, const struct val *);

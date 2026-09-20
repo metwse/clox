@@ -13,6 +13,7 @@
 #include <limits.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <string.h>
 
 
@@ -282,19 +283,11 @@ static void compile_expression(struct chunk *c,
 
 		case 8: {
 			uint32_t ident_id = SEMINFO_IDENT_ID(rchild(n, 0));
-			uint32_t local_slot = compiler_resolve_local(current, ident_id);
 
-			if (local_slot == UINT_MAX) {
-				if (is_lvalue)
-					emit_inst_u8or24(OP_SET_GLOBAL, ident_id);
-				else
-					emit_inst_u8or24(OP_GET_GLOBAL, ident_id);
-			} else {
-				if (is_lvalue)
-					emit_inst_u8or24(OP_SET_LOCAL, local_slot);
-				else
-					emit_inst_u8or24(OP_GET_LOCAL, local_slot);
-			}
+			if (is_lvalue)
+				emit_inst_set(ident_id);
+			else
+				emit_inst_get(ident_id);
 			break;
 		}
 		}
@@ -323,7 +316,6 @@ static void compile_var_decl(struct chunk *c,
 			     struct compiler *current)
 {
 	update_line(rchild(n, 0));
-	uint32_t ident_id = SEMINFO_IDENT_ID(rchild(n, 1));
 
 	struct rdesc_node optasgn = rchild(n, 2);
 	if (ralt_idx(optasgn) == 0) {
@@ -332,11 +324,8 @@ static void compile_var_decl(struct chunk *c,
 		emit_inst(OP_NIL);
 	}
 
-	uint32_t local_slot = compiler_resolve_local(current, ident_id);
-	if (local_slot == UINT16_MAX || current->scope_depth == 0)
-		emit_inst_u8or24(OP_DEFINE_GLOBAL, ident_id);
-	else
-		compiler_define_local(current, ident_id);
+	uint32_t ident_id = SEMINFO_IDENT_ID(rchild(n, 1));
+	compiler_emit_define_variable_inst(current, c, ident_id);
 }
 
 static void compile_block(struct chunk *c,
@@ -540,7 +529,7 @@ static void compile_function_decl(struct chunk *c,
 	size_t arity = 0;
 
 	struct compiler enclosed;
-	compiler_xinit(&enclosed);
+	compiler_xinit(&enclosed, current);
 
 	struct chunk new_chunk;
 	chunk_xinit(&new_chunk);
@@ -550,7 +539,6 @@ static void compile_function_decl(struct chunk *c,
 
 	c = &new_chunk;
 	current = &enclosed;
-	compiler_begin_scope(&enclosed);
 
 	struct rdesc_node optparams = rchild(n, 2);
 	if (ralt_idx(optparams) == 0) {
@@ -579,23 +567,26 @@ static void compile_function_decl(struct chunk *c,
 	emit_inst(OP_NIL);
 	emit_inst(OP_RETURN);
 
-	compiler_end_scope_without_cleanup(&enclosed);
-
 	c = hold_c;
 	current = hold_compiler;
 
-	/* chunk_disassemble(&new_chunk, stdout, 0, 0); */
+	chunk_disassemble(&new_chunk, stdout, 0, 0);
+	printf("\n\n");
 
 	uint32_t ident_id = SEMINFO_IDENT_ID(rchild(n, 1));
 
-	struct obj_function *fun = obj_function_new(new_chunk, ident_id, arity);
+	struct obj_function *fun = obj_function_new(new_chunk,
+						    ident_id,
+						    arity,
+						    fstack_len(&enclosed.upvalues));
 
-	emit_owned_const(OBJ_VAL((struct obj *) fun));
-	emit_inst_u8or24(OP_DEFINE_GLOBAL, ident_id);
+	struct val v = OBJ_VAL((struct obj *) fun);
+	uint32_t constant_id = chunk_xpush_constant(c, &v);
+
+	compiler_emit_closure_inst(current, &enclosed, c, constant_id);
+	compiler_emit_define_variable_inst(current, c, ident_id);
 
 	compiler_destroy(&enclosed);
-
-	n = rchild(n, 1);
 }
 
 static void compile_return_stmt(struct chunk *c,
@@ -636,15 +627,19 @@ static void compile_decl(struct chunk *c,
 }
 
 /* shall procide NT_DECL */
-void chunk_xcompile(struct chunk *c, struct rdesc_node n)
+struct chunk chunk_xcompile(struct rdesc_node n)
 {
+	struct chunk c;
 	struct compiler current;
 
-	compiler_xinit(&current);
+	chunk_xinit(&c);
+	compiler_xinit(&current, NULL);
 
-	compile_decl(c, n, &current);
-	chunk_xwrite_inst(c, current.line, (struct inst) { .op = OP_NIL });
-	chunk_xwrite_inst(c, current.line, (struct inst) { .op = OP_RETURN });
+	compile_decl(&c, n, &current);
+	chunk_xwrite_inst(&c, current.line, (struct inst) { .op = OP_NIL });
+	chunk_xwrite_inst(&c, current.line, (struct inst) { .op = OP_RETURN });
 
 	compiler_destroy(&current);
+
+	return c;
 }

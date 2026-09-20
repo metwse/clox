@@ -1,7 +1,8 @@
+#include "compiler_internal.h"
+
 #include "../include/chunk.h"
 #include "../include/instructions.h"
 #include "../include/value.h"
-#include "../include/object.h"
 
 #include "../vendor/libfun/include/stack.h"
 
@@ -14,7 +15,6 @@ struct chunk_line_info {
 	int line;
 	int count;
 };
-
 
 void chunk_xinit(struct chunk *c)
 {
@@ -29,6 +29,7 @@ void chunk_destroy(struct chunk *c)
 	fstack_destroy(&c->chunk);
 	fstack_destroy(&c->chunk_line_info);
 
+	/* TODO: GC will replace this.
 	for (size_t i = 0; i < fstack_len(&c->constants); i++) {
 		struct val v;
 		v = *(struct val *) fstack_at(&c->constants, i);
@@ -36,6 +37,7 @@ void chunk_destroy(struct chunk *c)
 		if (IS_OBJ(v) && AS_OBJ(v) != NULL)
 			obj_free(AS_OBJ(v));
 	}
+	*/
 
 	fstack_destroy(&c->constants);
 }
@@ -71,7 +73,7 @@ static void chunk_xwrite(struct chunk *c, int line, const char *chunk, size_t le
 void chunk_xwrite_inst(struct chunk *c, int line, struct inst inst)
 {
 	chunk_xwrite(c, line, &(char) { inst.op }, 1);
-	size_t arg_len = inst_arg_len(inst.op);
+	size_t arg_len = inst_len(inst) - 1;
 
 	if (inst.args != NULL) {
 		chunk_xwrite(c, line, inst.args, arg_len);
@@ -86,7 +88,7 @@ void chunk_overwrite_inst(struct chunk *c, size_t offset, struct inst inst)
 	*(uint8_t *) fstack_at(&c->chunk, offset) = inst.op;
 
 	if (inst.args != NULL) {
-		for (size_t i = 0; i < inst_arg_len(inst.op); i++)
+		for (size_t i = 0; i < inst_len(inst) - 1; i++)
 			*(uint8_t *) fstack_at(&c->chunk, offset + i + 1) =
 				((uint8_t *) inst.args)[i];
 	}
@@ -119,11 +121,11 @@ void chunk_disassemble(struct chunk *c, FILE *out, size_t offset, size_t len)
 			line = cli->line;
 		}
 
-		struct inst ins = chunk_read_inst(c, offset + i);
+		struct inst inst = chunk_read_inst(c, offset + i);
 		fprintf(out, "%04zu ", offset + i);
-		i += 1 + inst_arg_len(ins.op);
+		i += inst_len(inst);
 
-		inst_print(ins, out, prev_line == line ? -1 : line);
+		inst_print(inst, out, prev_line == line ? -1 : line);
 
 		prev_line = line;
 	}

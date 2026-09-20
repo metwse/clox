@@ -21,6 +21,7 @@ void vm_xinit(struct vm *vm)
 	fstack_xinit(&vm->stack, sizeof(struct val));
 	fstack_xinit(&vm->objects, sizeof(struct obj *));
 	fhashmap_xinit(&vm->globals, sizeof(struct val));
+	vm->open_upvalues = NULL;
 }
 
 void vm_destroy(struct vm *vm)
@@ -29,7 +30,7 @@ void vm_destroy(struct vm *vm)
 	fstack_destroy(&vm->stack);
 
 	for (size_t i = 0; i < fstack_len(&vm->objects); i++)
-		obj_free(*(struct obj **) fstack_at(&vm->objects, vm->current.fp + i));
+		obj_free(*(struct obj **) fstack_at(&vm->objects, i));
 
 	fstack_destroy(&vm->objects);
 	fhashmap_destroy(&vm->globals);
@@ -100,7 +101,7 @@ static bool is_falsey(struct val v)
 
 static bool is_callable(struct val v)
 {
-	return IS_OBJ(v) && IS_OBJ_TYPE(AS_OBJ(v), OBJ_FUNCTION);
+	return IS_OBJ(v) && IS_OBJ_TYPE(AS_OBJ(v), OBJ_CLOSURE);
 }
 
 /* TODO: query line info */
@@ -126,23 +127,26 @@ static void recover_runtime_error(struct vm *vm);
 
 #define read_and_increment_pc do { \
 		inst = chunk_read_inst(vm->current.c, vm->current.pc); \
-		vm->current.pc += 1 + inst_arg_len(inst.op); \
+		vm->current.pc += inst_len(inst); \
 	} while (0)
 
-static int call(struct vm *vm, struct obj_function *callable, uint32_t arity)
+static int call(struct vm *vm, struct obj_closure *closure, uint32_t arg_count)
 {
-	if (arity != callable->arity) {
+	const struct obj_function *function = closure->function;
+
+	if (arg_count != function->arity) {
 		runtime_error("expected %"PRIu32 " arguments, got %"PRIu32,
-			      callable->arity, arity);
+			      function->arity, arg_count);
 	}
 
 	fstack_xpush(&vm->frames, &vm->current);
 
 	vm->current = (struct call_frame) {
-		.c = &callable->chunk,
-		.fp = fstack_len(&vm->stack) - arity,
+		.closure = closure,
+		.c = &function->chunk,
+		.fp = fstack_len(&vm->stack) - arg_count,
 		.pc = 0,
-		.arity = callable->arity
+		.arity = arg_count,
 	};
 
 	return 0;
@@ -153,6 +157,42 @@ static void recover_runtime_error(struct vm *vm)
 	fstack_destroy(&vm->stack);
 	fstack_xinit(&vm->stack, sizeof(struct val));
 	/* TODO: continue from the previous function frame */
+}
+
+static struct obj_upvalue *capture_upvalue(struct vm *vm, size_t local)
+{
+	struct obj_upvalue *prev = NULL;
+	struct obj_upvalue *upval = vm->open_upvalues;
+
+	while (upval != NULL && upval->location.local > local) {
+		prev = upval;
+		upval = upval->next;
+	}
+
+	if (upval != NULL && upval->location.local == local)
+		return upval;
+
+	struct obj_upvalue *new_upval = obj_upcalue_new(local);
+	new_upval->next = upval;
+
+	if (prev == NULL)
+		vm->open_upvalues = new_upval;
+	else
+		prev->next = new_upval;
+
+	return new_upval;
+}
+
+static void close_upvalues(struct vm *vm, size_t last)
+{
+	while (vm->open_upvalues != NULL &&
+	       vm->open_upvalues->location.local >= last) {
+		struct obj_upvalue *upval = vm->open_upvalues;
+		upval->is_local = false;
+		upval->location.captured =
+			*(struct val *) fstack_at(&vm->stack, upval->location.local);
+		vm->open_upvalues = upval->next;
+	}
 }
 
 static int vm_run(struct vm *vm)
@@ -200,34 +240,24 @@ static int vm_run(struct vm *vm)
 			pop(vm);
 			break;
 
+		case OP_CLOSE_UPVALUE: {
+			close_upvalues(vm, fstack_len(&vm->stack) - 1);
+			pop(vm);
+			break;
+		}
+
 		case OP_CONSTANT:
-		case OP_CONSTANT_LONG:
-		case OP_CONSTANT_ONCE:
-		case OP_CONSTANT_ONCE_LONG: {
+		case OP_CONSTANT_LONG: {
 			size_t constant_idx = get_u8_or_u24_arg(inst, 0);
 
-			struct val *v_ref =
-				(struct val *) fstack_at(&c->constants, constant_idx);
-			struct val v = *v_ref;
+			struct val v =
+				*(struct val *) fstack_at(&c->constants, constant_idx);
 
 			if (IS_OBJ(v)) {
-				if (inst.op == OP_CONSTANT_ONCE ||
-				    inst.op == OP_CONSTANT_ONCE_LONG) {
-					if (AS_OBJ(v) == NULL)
-						runtime_error("once constant has "
-							      "alredy been consumed");
+				struct obj *new_obj = obj_clone(AS_OBJ(v));
+				vm_obj_track(vm, new_obj);
 
-					/* transfer the ownership of the object */
-					v_ref->val.obj = NULL;
-					vm_obj_track(vm, AS_OBJ(v));
-
-					xpush(vm, &OBJ_VAL(AS_OBJ(v)));
-				} else {
-					struct obj *new_obj = obj_clone(AS_OBJ(v));
-					vm_obj_track(vm, new_obj);
-
-					xpush(vm, &OBJ_VAL(new_obj));
-				}
+				xpush(vm, &OBJ_VAL(new_obj));
 			} else {
 				xpush(vm, &v);
 			}
@@ -290,7 +320,6 @@ static int vm_run(struct vm *vm)
 			size_t slot = get_u8_or_u24_arg(inst, 0);
 			struct val *v = fstack_at(&vm->stack, vm->current.fp + slot);
 
-
 			if (inst.op == OP_GET_LOCAL || inst.op == OP_GET_LOCAL_LONG)
 				xpush(vm, v);
 			else
@@ -304,7 +333,7 @@ static int vm_run(struct vm *vm)
 			uint32_t jump = inst_get_u24_arg(inst, 0);
 
 			if (inst.op == OP_JUMP_BACK)
-				vm->current.pc -= jump + inst_arg_len(OP_JUMP_BACK) + 1;
+				vm->current.pc -= jump + inst_len(inst);
 			else if (inst.op == OP_JUMP ||
 			    is_falsey(peek(vm, 0)))
 				vm->current.pc += jump;
@@ -319,8 +348,75 @@ static int vm_run(struct vm *vm)
 			if (!is_callable(v))
 				runtime_error("expression result is not callable");
 
-			if (call(vm, AS_FUNCTION(AS_OBJ(v)), arg_count))
+			struct obj_closure *closure = AS_CLOSURE(AS_OBJ(v));
+
+			if (call(vm, closure, arg_count))
 				return 1;
+
+			break;
+		}
+
+		case OP_GET_UPVALUE:
+		case OP_GET_UPVALUE_LONG:
+		case OP_SET_UPVALUE:
+		case OP_SET_UPVALUE_LONG: {
+			size_t slot = get_u8_or_u24_arg(inst, 0);
+
+			struct obj_upvalue *upval =
+				vm->current.closure->upvalues[slot];
+
+			struct val *v;
+
+			if (upval->is_local)
+				v = fstack_at(&vm->stack, upval->location.local);
+			else
+				v = &upval->location.captured;
+
+			if (inst.op == OP_GET_UPVALUE || inst.op == OP_GET_UPVALUE_LONG)
+				xpush(vm, v);
+			else
+				*v = peek(vm, 0);
+
+			break;
+		}
+
+		case OP_CLOSURE:
+		case OP_CLOSURE_LONG: {
+			size_t constant_idx = get_u8_or_u24_arg(inst, 0);
+
+			struct val v =
+				*(struct val *) fstack_at(&c->constants, constant_idx);
+
+			clox_assert(IS_OBJ(v) && IS_OBJ_TYPE(AS_OBJ(v), OBJ_FUNCTION),
+				    "can only create closures from functions");
+
+			struct obj_closure *closure =
+				obj_closure_new(AS_FUNCTION(AS_OBJ(v)));
+
+			size_t offset = inst_arg_len(inst.op), i = 0;
+			uint32_t index, arg_len;
+			bool is_local;
+
+			while ((arg_len = inst_get_next_closure_arg(inst,
+								    offset,
+								    &index,
+								    &is_local) &&
+				i < closure->function->upvalue_count)) {
+
+				if (is_local) {
+					closure->upvalues[i] =
+						capture_upvalue(vm,
+								vm->current.fp + index);
+				} else {
+					closure->upvalues[i] =
+						vm->current.closure->upvalues[index];
+				}
+
+				i++;
+				offset += arg_len + 1;
+			}
+
+			xpush(vm, &OBJ_VAL((struct obj *) closure));
 
 			break;
 		}
@@ -373,6 +469,7 @@ static int vm_run(struct vm *vm)
 int vm_execute(struct vm *vm, const struct chunk *c)
 {
 	vm->current = (struct call_frame) {
+		.closure = NULL,
 		.c = c,
 		.arity = 0,
 		.fp = 0,

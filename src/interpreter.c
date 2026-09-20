@@ -56,8 +56,6 @@ int interpreter_run(struct interpreter *i, const char *source)
 {
 	scanner_feed(&i->scanner, source);
 
-	struct chunk chunk;
-
 	enum tk_id tk_id = TK_EOF;
 	struct seminfo seminfo;
 
@@ -76,12 +74,11 @@ int interpreter_run(struct interpreter *i, const char *source)
 		case RDESC_CONTINUE:
 			continue;
 
-		case RDESC_READY:
-			chunk_xinit(&chunk);
+		case RDESC_READY: {
+			struct chunk chunk =
+				chunk_xcompile(rdesc_get_root(&i->parser));
 
-			chunk_xcompile(&chunk, rdesc_get_root(&i->parser));
-
-			/* chunk_disassemble(&chunk, stderr, 0, 0); */
+			chunk_disassemble(&chunk, stderr, 0, 0);
 
 			if (vm_execute(&i->vm, &chunk))
 				clox_report("execution interrupted due to a "
@@ -92,6 +89,7 @@ int interpreter_run(struct interpreter *i, const char *source)
 			clox_assert(rdesc_start(&i->parser, NT_DECL) == 0,
 				    "cannot start rdesc");
 			continue;
+		  }
 
 		case RDESC_NOMATCH:
 			rdesc_reset(&i->parser);

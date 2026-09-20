@@ -4,27 +4,41 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
-
+#include <stdbool.h>
 
 #define LAST_OPCODE OP_NOT
 
+union op_closure_arg {
+	uint8_t last : 1;
+
+	struct op_closure_upvalue_arg {
+		uint8_t _pad : 1;
+		uint8_t is_local : 1;
+		uint8_t is_long : 1;
+		uint8_t index[];  /* 1 or 3 bytes */
+	} upvalue;
+};
+
+#define DEF_U8OR24(name) name, name ## _LONG
 enum opcode {
 	OP_RETURN,
 	OP_PRINT,
 	OP_POP,
+	OP_CLOSE_UPVALUE,
 
-	OP_CONSTANT, OP_CONSTANT_LONG,
-	OP_CONSTANT_ONCE, OP_CONSTANT_ONCE_LONG,
-
-	OP_DEFINE_GLOBAL, OP_DEFINE_GLOBAL_LONG,
-	OP_GET_GLOBAL, OP_GET_GLOBAL_LONG,
-	OP_SET_GLOBAL, OP_SET_GLOBAL_LONG,
-	OP_GET_LOCAL, OP_GET_LOCAL_LONG,
-	OP_SET_LOCAL, OP_SET_LOCAL_LONG,
+	DEF_U8OR24(OP_CONSTANT),
+	DEF_U8OR24(OP_DEFINE_GLOBAL),
+	DEF_U8OR24(OP_GET_GLOBAL),
+	DEF_U8OR24(OP_SET_GLOBAL),
+	DEF_U8OR24(OP_GET_LOCAL),
+	DEF_U8OR24(OP_SET_LOCAL),
+	DEF_U8OR24(OP_GET_UPVALUE),
+	DEF_U8OR24(OP_SET_UPVALUE),
 
 	OP_JUMP, OP_JUMP_IF_FALSE,
 	OP_JUMP_BACK,
 
+	DEF_U8OR24(OP_CLOSURE),
 	OP_CALL,
 
 	OP_NIL,
@@ -45,24 +59,28 @@ enum opcode {
 	OP_OR,
 	OP_NOT,
 };
+#undef DEF_U8OR24
 
+#define DEF_U8OR24(name) name, name "_LONG"
 static const char *const opcode_names[LAST_OPCODE + 1] = {
 	"RETURN",
 	"PRINT",
 	"POP",
+	"CLOSE_UPVALUE",
 
-	"CONSTANT", "CONSTANT_LONG",
-	"CONSTANT_ONCE", "CONSTANT_ONCE_LONG",
-
-	"DEFINE_GLOBAL", "DEFINE_GLOBAL_LONG",
-	"GET_GLOBAL", "GET_GLOBAL_LONG",
-	"SET_GLOBAL", "SET_GLOBAL_LONG",
-	"GET_LOCAL", "GET_LOCAL_LONG",
-	"SET_LOCAL", "SET_LOCAL_LONG",
+	DEF_U8OR24("CONSTANT"),
+	DEF_U8OR24("DEFINE_GLOBAL"),
+	DEF_U8OR24("GET_GLOBAL"),
+	DEF_U8OR24("SET_GLOBAL"),
+	DEF_U8OR24("GET_LOCAL"),
+	DEF_U8OR24("SET_LOCAL"),
+	DEF_U8OR24("GET_UPVALUE"),
+	DEF_U8OR24("SET_UPVALUE"),
 
 	"JUMP", "JUMP_IF_FALSE",
 	"JUMP_BACK",
 
+	DEF_U8OR24("CLOSURE"),
 	"CALL",
 
 	"NIL",
@@ -83,15 +101,18 @@ static const char *const opcode_names[LAST_OPCODE + 1] = {
 	"OR",
 	"NOT",
 };
+#undef DEF_U8OR24
 
 struct inst {
 	enum opcode op;
 	void *args;
 };
 
+/* Gets the total size of the arguments. */
+size_t inst_arg_len(enum opcode op);
 
-/* Gets the total size of arguments. */
-size_t inst_arg_len(enum opcode);
+/* Gets the total size of the instruction. */
+size_t inst_len(struct inst);
 
 /* Debug printing an instruction. */
 void inst_print(struct inst, FILE *out, int line);
@@ -101,6 +122,13 @@ uint8_t inst_get_u8_arg(struct inst, size_t offset);
 
 /* Get 3 byte argument. */
 uint32_t inst_get_u24_arg(struct inst, size_t offset);
+
+/* Gets the next closure argument. Returns 0 if no arguments remaining, or the
+ * argument length (1 or 3). */
+int inst_get_next_closure_arg(struct inst,
+			      size_t offset,
+			      uint32_t *out_index,
+			      bool *out_is_local);
 
 
 #endif

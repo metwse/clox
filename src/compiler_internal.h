@@ -23,12 +23,6 @@
 		emit_inst_u8or24(OP_CONSTANT, constant_id); \
 	} while (0)
 
-#define emit_owned_const(v) do { \
-		uint32_t constant_id = chunk_xpush_constant(c, &v); \
-		emit_inst_u8or24(OP_CONSTANT_ONCE, constant_id); \
-	} while (0)
-
-
 #define overwrite_inst(offset, opcode, arguments) \
 	chunk_overwrite_inst(c, offset, \
 			    (struct inst) { .op = opcode, .args = (arguments) });
@@ -44,12 +38,17 @@
 			(struct inst) { .op = opcode, .args = (arguments) })
 #define emit_inst_u8or24(opcode, num) do { \
 		emit_inst_args(num < 256 ? \
-				opcode : opcode ## _LONG, \
+				opcode : opcode + 1, \
 				(void *) arg_u8or24(num)); \
 	} while (0)
 #define emit_inst_u8(opcode, num) do { \
 		emit_inst_args(opcode, &(uint8_t) { num }); \
 	} while (0)
+
+#define emit_inst_set(ident_id) \
+	compiler_emit_variable_inst(current, c, true, ident_id)
+#define emit_inst_get(ident_id) \
+	compiler_emit_variable_inst(current, c, false, ident_id)
 
 #define update_line(tk) do { \
 		current->line = ((struct seminfo *) rseminfo(tk))->line; \
@@ -57,23 +56,45 @@
 
 
 struct compiler {
+	struct compiler *enclosing;
 	int line;
 	struct fstack locals;
+	struct fstack upvalues;
 	int scope_depth;
 };
 
 struct local {
 	uint32_t ident_id;
 	int depth;
+	bool is_captured;
 };
 
+struct upvalue {
+	uint32_t index;
+	bool is_local;
+};
 
-void compiler_xinit(struct compiler *);
+void chunk_xinit(struct chunk *);
+
+void compiler_xinit(struct compiler *, struct compiler *enclosing);
 
 void compiler_destroy(struct compiler *);
 
-/* Returns slot of the local variable if found, UINT_MAX otherwise. */
-uint32_t compiler_resolve_local(struct compiler *, uint32_t ident_id);
+/* Emits GET/SET instructions for local variables, upvalues, or globals. */
+void compiler_emit_variable_inst(struct compiler *,
+				 struct chunk *,
+				 bool is_set,
+				 uint32_t ident_id);
+/* Defines a new local variable. */
+void compiler_emit_define_variable_inst(struct compiler *,
+					struct chunk *,
+					uint32_t ident_id);
+
+/* Emits closure a closure bytecode. */
+void compiler_emit_closure_inst(struct compiler *current,
+				struct compiler *enclosed,
+				struct chunk *c,
+				uint32_t constant_id);
 
 /* Defines a new local variable. */
 void compiler_define_local(struct compiler *, uint32_t ident_id);
@@ -83,9 +104,6 @@ void compiler_begin_scope(struct compiler *);
 
 /* Deletes a scope. */
 void compiler_end_scope(struct compiler *, struct chunk *);
-
-/* End scope without local variable cleanup. */
-void compiler_end_scope_without_cleanup(struct compiler *);
 
 
 #endif
