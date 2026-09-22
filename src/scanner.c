@@ -1,43 +1,48 @@
 #include "../include/common.h"
 #include "../include/grammar.h"
-#include <stdint.h>
 #include "../include/scanner.h"
 
-#define T char, enum tk_id, keyword_map
-#include "../vendor/libfun/include/hashmap.h"
+#define T char, enum tk_id, keywords
+#include "../vendor/libfun/include/hmap.h"
 
 #include <ctype.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-#include <threads.h>
 
 
-static struct fhashmap_keyword_map km;
+static struct fhmap_keywords keywords;
 
 
 void scanner_xstatic_init(void)
 {
-	fhashmap_keyword_map_xinit(&km);
+	fhmap_keywords_xinit(&keywords);
 
+	/* strlen excludes null-terminator. the scanner will pass non-null
+	 * terminated string views, so we cannot use xinsert3 here as it adds
+	 * null-terminator to keys */
 	for (enum tk_id i = TK_AND; i <= TK_WHILE; i++)
-		fhashmap_keyword_map_xinsert3(&km,
-					      tk_names[i],
-					      &(enum tk_id) { i });
+		fhmap_keywords_xinsert(&keywords,
+				       tk_names[i],
+				       strlen(tk_names[i]),
+				       &(enum tk_id) { i });
+
+	fhmap_keywords_shrink_to_fit(&keywords);
 }
 
 void scanner_static_destroy(void)
 {
-	fhashmap_keyword_map_destroy(&km);
+	fhmap_keywords_destroy(&keywords);
 }
 
 void scanner_xinit(struct scanner *s)
 {
 	s->cur = NULL;
 
-	fhashmap_ident_name_to_id_xinit(&s->ident_id_map);
-	fstack_ident_id_to_name_xinit(&s->ident_id_rev_map);
+	fhmap_ident_ids_xinit(&s->ident_ids);
+	fstack_ident_names_xinit(&s->ident_names);
 
 	s->last_id = -1;
 	s->line = s->col = 1;
@@ -45,16 +50,16 @@ void scanner_xinit(struct scanner *s)
 
 void scanner_destroy(struct scanner *s)
 {
-	fhashmap_ident_name_to_id_destroy(&s->ident_id_map);
+	fhmap_ident_ids_destroy(&s->ident_ids);
 
 	for (size_t i = 0;
-	     i < fstack_ident_id_to_name_len(&s->ident_id_rev_map);
+	     i < fstack_ident_names_len(&s->ident_names);
 	     i++) {
 		char *ident_name =
-			*fstack_ident_id_to_name_at_mut(&s->ident_id_rev_map, i);
+			*fstack_ident_names_at_mut(&s->ident_names, i);
 		free(ident_name);
 	}
-	fstack_ident_id_to_name_destroy(&s->ident_id_rev_map);
+	fstack_ident_names_destroy(&s->ident_names);
 }
 
 void scanner_feed(struct scanner *s, const char *buf)
@@ -71,7 +76,7 @@ void scanner_new_line(struct scanner *s)
 
 const char *scanner_get_ident_name(const struct scanner *s, size_t id)
 {
-	return *fstack_ident_id_to_name_at(&s->ident_id_rev_map, id);
+	return *fstack_ident_names_at(&s->ident_names, id);
 }
 
 /* Regex helpers. */
@@ -155,29 +160,27 @@ static void collect_ident_or_keyword(struct scanner *s,
 	}
 
 	const enum tk_id *keyword_id_ptr =
-		fhashmap_keyword_map_get(&km, start, ident_len);
+		fhmap_keywords_get(&keywords, start, ident_len);
 	if (keyword_id_ptr) {
 		return_tk(*keyword_id_ptr);
 	}
 
-	const uint32_t *ident_id = fhashmap_ident_name_to_id_get(&s->ident_id_map,
-								 start,
-								 ident_len);
+	const uint32_t *ident_id = fhmap_ident_ids_get(&s->ident_ids,
+						       start,
+						       ident_len);
 	if (ident_id == NULL) {
 		uint32_t new_ident_id = ++s->last_id;
 
-		fhashmap_ident_name_to_id_xinsert(&s->ident_id_map,
-						  start,
-						  ident_len,
-						  &new_ident_id);
+		fhmap_ident_ids_xinsert(&s->ident_ids, start,
+					ident_len,
+					&new_ident_id);
 
 		char *ident_name = malloc(ident_len + 1);
 		clox_assert(ident_name, "memory allocation for ident_name");
 		ident_name[ident_len] = '\0';
 		memcpy(ident_name, start, ident_len);
 
-		fstack_ident_id_to_name_xpush(&s->ident_id_rev_map,
-					      &ident_name);
+		fstack_ident_names_xpush(&s->ident_names, &ident_name);
 
 		out_seminfo->seminfo.ident_id = new_ident_id;
 	} else {

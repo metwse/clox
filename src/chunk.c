@@ -13,8 +13,14 @@ void chunk_xinit(struct chunk *c)
 {
 	fstack_chunk_xinit(&c->chunk);
 	fstack_chunk_line_xinit(&c->chunk_line);
+	fstack_vals_xinit(&c->constants);
+}
 
-	fstack_val_xinit(&c->constants);
+void chunk_compact(struct chunk *c)
+{
+	fstack_chunk_shrink_to_fit(&c->chunk);
+	fstack_chunk_line_shrink_to_fit(&c->chunk_line);
+	fstack_vals_shrink_to_fit(&c->constants);
 }
 
 void chunk_destroy(struct chunk *c)
@@ -32,7 +38,7 @@ void chunk_destroy(struct chunk *c)
 	}
 	*/
 
-	fstack_val_destroy(&c->constants);
+	fstack_vals_destroy(&c->constants);
 }
 
 static void chunk_xwrite(struct chunk *c, int line, const uint8_t *chunk, size_t len)
@@ -140,9 +146,9 @@ struct inst chunk_read_inst(const struct chunk *c, size_t offset)
 
 uint32_t chunk_xpush_constant(struct chunk *c, const struct val *v)
 {
-	uint32_t constant_id = fstack_val_len(&c->constants);
+	uint32_t constant_id = fstack_vals_len(&c->constants);
 
-	fstack_val_xpush(&c->constants, v);
+	fstack_vals_xpush(&c->constants, v);
 
 	return constant_id;
 }

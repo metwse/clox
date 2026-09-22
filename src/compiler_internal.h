@@ -64,23 +64,26 @@ struct upvalue {
 	bool is_local;
 };
 
-#define T struct local, local
+#define T struct local, locals
 #include "../vendor/libfun/include/stack.h"
 
-#define T struct upvalue, upvalue
+#define T struct upvalue, upvalues
 #include "../vendor/libfun/include/stack.h"
 
 
 struct compiler {
 	struct compiler *enclosing;
 	int line;
-	struct fstack_local locals;
-	struct fstack_upvalue upvalues;
+	struct fstack_locals locals;
+	struct fstack_upvalues upvalues;
 	int scope_depth;
 };
 
 
 void chunk_xinit(struct chunk *);
+
+/* Shrinks dynamic arrays of chunk as much as possible. */
+void chunk_compact(struct chunk *);
 
 void compiler_xinit(struct compiler *, struct compiler *enclosing);
 

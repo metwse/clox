@@ -11,7 +11,6 @@
 #include <string.h>
 
 
-
 static uint32_t resolve_local(struct compiler *, uint32_t);
 static uint32_t resolve_upvalue(struct compiler *, uint32_t);
 static uint32_t add_upvalue(struct compiler *, uint32_t, bool);
@@ -22,14 +21,14 @@ void compiler_xinit(struct compiler *current, struct compiler *enclosing)
 	current->enclosing = enclosing;
 	current->line = 0;
 	current->scope_depth = 0;
-	fstack_local_xinit(&current->locals);
-	fstack_upvalue_xinit(&current->upvalues);
+	fstack_locals_xinit(&current->locals);
+	fstack_upvalues_xinit(&current->upvalues);
 }
 
 void compiler_destroy(struct compiler *current)
 {
-	fstack_local_destroy(&current->locals);
-	fstack_upvalue_destroy(&current->upvalues);
+	fstack_locals_destroy(&current->locals);
+	fstack_upvalues_destroy(&current->upvalues);
 }
 
 void compiler_emit_variable_inst(struct compiler *current,
@@ -74,9 +73,9 @@ void compiler_emit_closure_inst(struct compiler *current,
 				uint32_t constant_id)
 {
 	size_t len = constant_id < 256 ? 1 : 3;
-	for (size_t i = 0; i < fstack_upvalue_len(&enclosed->upvalues); i++) {
+	for (size_t i = 0; i < fstack_upvalues_len(&enclosed->upvalues); i++) {
 		const struct upvalue *upval =
-			fstack_upvalue_at(&enclosed->upvalues, i);
+			fstack_upvalues_at(&enclosed->upvalues, i);
 
 		len += (upval->index < 256 ? 1 : 3) + 1;
 	}
@@ -86,9 +85,9 @@ void compiler_emit_closure_inst(struct compiler *current,
 
 	memcpy(&args, arg_u8or24(constant_id), constant_id < 256 ? 1 : 3);
 	size_t offset = constant_id < 256 ? 1 : 3;
-	for (size_t i = 0; i < fstack_upvalue_len(&enclosed->upvalues); i++) {
+	for (size_t i = 0; i < fstack_upvalues_len(&enclosed->upvalues); i++) {
 		const struct upvalue *upval =
-			fstack_upvalue_at(&enclosed->upvalues, i);
+			fstack_upvalues_at(&enclosed->upvalues, i);
 
 		union op_closure_arg arg;
 		arg.last = false;
@@ -117,10 +116,10 @@ void compiler_end_scope(struct compiler *current, struct chunk *c)
 {
 	/* pop local variables */
 	const struct local *local;
-	while (fstack_local_len(&current->locals) > 0 &&
-	       (local = fstack_local_top(&current->locals)) &&
+	while (fstack_locals_len(&current->locals) > 0 &&
+	       (local = fstack_locals_top(&current->locals)) &&
 	       local->depth == current->scope_depth) {
-		fstack_local_pop(&current->locals);
+		fstack_locals_pop(&current->locals);
 
 		if (local->is_captured)
 			emit_inst(OP_CLOSE_UPVALUE);
@@ -132,33 +131,33 @@ void compiler_end_scope(struct compiler *current, struct chunk *c)
 
 void compiler_define_local(struct compiler *current, uint32_t ident_id)
 {
-	fstack_local_xpush(&current->locals,
-			   &(struct local) {
+	fstack_locals_xpush(&current->locals,
+			    &(struct local) {
 				    .ident_id = ident_id,
 				    .depth = current->scope_depth,
 				    .is_captured = false
-			   });
+			    });
 }
 
 static uint32_t add_upvalue(struct compiler *current,
 			    uint32_t index,
 			    bool is_local)
 {
-	uint32_t upvalue_count = fstack_upvalue_len(&current->upvalues);
+	uint32_t upvalue_count = fstack_upvalues_len(&current->upvalues);
 
 	for (size_t i = 0; i < upvalue_count; i++) {
 		const struct upvalue *upval =
-			fstack_upvalue_at(&current->upvalues, i);
+			fstack_upvalues_at(&current->upvalues, i);
 
 		if (upval->index == index && upval->is_local == is_local)
 			return i;
 	}
 
-	fstack_upvalue_xpush(&current->upvalues,
-			     &(struct upvalue) {
-				.index = index,
-				.is_local = is_local,
-			     });
+	fstack_upvalues_xpush(&current->upvalues,
+			      &(struct upvalue) {
+				      .index = index,
+				      .is_local = is_local,
+			      });
 
 	return upvalue_count;
 }
@@ -171,7 +170,7 @@ static uint32_t resolve_upvalue(struct compiler *current, uint32_t ident_id)
 	uint32_t local = resolve_local(current->enclosing, ident_id);
 	if (local != UINT_MAX) {
 		struct local *local_v =
-			fstack_local_at_mut(&current->enclosing->locals, local);
+			fstack_locals_at_mut(&current->enclosing->locals, local);
 		local_v->is_captured = true;
 		return add_upvalue(current, local, true);
 	}
@@ -186,9 +185,9 @@ static uint32_t resolve_upvalue(struct compiler *current, uint32_t ident_id)
 
 static uint32_t resolve_local(struct compiler *current, uint32_t ident_id)
 {
-	for (size_t i = fstack_local_len(&current->locals); i > 0; i--) {
+	for (size_t i = fstack_locals_len(&current->locals); i > 0; i--) {
 		const struct local *var =
-			fstack_local_at(&current->locals, i - 1);
+			fstack_locals_at(&current->locals, i - 1);
 		if (var->ident_id == ident_id)
 			return i - 1;
 	}

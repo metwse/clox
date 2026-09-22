@@ -4,9 +4,6 @@
 #include "../include/value.h"
 #include "../include/vm.h"
 
-#include "../vendor/libfun/include/stack.h"
-#include "../vendor/libfun/include/hashmap.h"
-
 #include <inttypes.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -17,17 +14,17 @@
 
 void vm_xinit(struct vm *vm)
 {
-	fstack_call_frame_xinit(&vm->frames);
-	fstack_val_xinit(&vm->stack);
+	fstack_call_frames_xinit(&vm->frames);
+	fstack_vals_xinit(&vm->stack);
 	/* fstack_xinit(&vm->objects, sizeof(struct obj *)); */
-	fhashmap_global_xinit(&vm->globals);
+	fhmap_globals_xinit(&vm->globals);
 	vm->open_upvalues = NULL;
 }
 
 void vm_destroy(struct vm *vm)
 {
-	fstack_call_frame_destroy(&vm->frames);
-	fstack_val_destroy(&vm->stack);
+	fstack_call_frames_destroy(&vm->frames);
+	fstack_vals_destroy(&vm->stack);
 
 	/*
 	for (size_t i = 0; i < fstack_len(&vm->objects); i++)
@@ -35,7 +32,7 @@ void vm_destroy(struct vm *vm)
 	fstack_destroy(&vm->objects);
 	*/
 
-	fhashmap_global_destroy(&vm->globals);
+	fhmap_globals_destroy(&vm->globals);
 }
 
 /*
@@ -46,15 +43,15 @@ void vm_obj_track(struct vm *vm, struct obj *o)
 */
 
 static void xpush(struct vm *vm, struct val *v) {
-	fstack_val_xpush(&vm->stack, v);
+	fstack_vals_xpush(&vm->stack, v);
 }
 
 static struct val pop(struct vm *vm) {
-	return *fstack_val_pop(&vm->stack);
+	return *fstack_vals_pop(&vm->stack);
 }
 
 static struct val peek(struct vm *vm, size_t distance) {
-	return *fstack_val_peek(&vm->stack, distance);
+	return *fstack_vals_peek(&vm->stack, distance);
 }
 
 static bool values_equal(struct val a, struct val b)
@@ -142,12 +139,12 @@ static int call(struct vm *vm, struct obj_closure *closure, uint32_t arg_count)
 			      function->arity, arg_count);
 	}
 
-	fstack_call_frame_xpush(&vm->frames, &vm->current);
+	fstack_call_frames_xpush(&vm->frames, &vm->current);
 
 	vm->current = (struct call_frame) {
 		.closure = closure,
 		.c = &function->chunk,
-		.fp = fstack_val_len(&vm->stack) - arg_count,
+		.fp = fstack_vals_len(&vm->stack) - arg_count,
 		.pc = 0,
 		.arity = arg_count,
 	};
@@ -157,8 +154,8 @@ static int call(struct vm *vm, struct obj_closure *closure, uint32_t arg_count)
 
 static void recover_runtime_error(struct vm *vm)
 {
-	fstack_val_destroy(&vm->stack);
-	fstack_val_xinit(&vm->stack);
+	fstack_vals_destroy(&vm->stack);
+	fstack_vals_xinit(&vm->stack);
 	/* TODO: continue from the previous function frame */
 }
 
@@ -193,7 +190,7 @@ static void close_upvalues(struct vm *vm, size_t last)
 		struct obj_upvalue *upval = vm->open_upvalues;
 		upval->is_local = false;
 		upval->location.captured =
-			*fstack_val_at(&vm->stack, upval->location.local);
+			*fstack_vals_at(&vm->stack, upval->location.local);
 		vm->open_upvalues = upval->next;
 	}
 }
@@ -209,10 +206,10 @@ static int vm_run(struct vm *vm)
 
 		switch (inst.op) {
 		case OP_RETURN: {
-			if (fstack_call_frame_len(&vm->frames) == 0) {
+			if (fstack_call_frames_len(&vm->frames) == 0) {
 				print_val(pop(vm));
 
-				clox_assert(fstack_val_len(&vm->stack) == 0,
+				clox_assert(fstack_vals_len(&vm->stack) == 0,
 					    "inconsistent stack");
 
 				return 0;
@@ -229,7 +226,8 @@ static int vm_run(struct vm *vm)
 
 				xpush(vm, &res);
 
-				vm->current = *fstack_call_frame_pop(&vm->frames);
+				vm->current =
+					*fstack_call_frames_pop(&vm->frames);
 			}
 			break;
 		}
@@ -243,7 +241,7 @@ static int vm_run(struct vm *vm)
 			break;
 
 		case OP_CLOSE_UPVALUE: {
-			close_upvalues(vm, fstack_val_len(&vm->stack) - 1);
+			close_upvalues(vm, fstack_vals_len(&vm->stack) - 1);
 			pop(vm);
 			break;
 		}
@@ -253,7 +251,7 @@ static int vm_run(struct vm *vm)
 			size_t constant_idx = get_u8_or_u24_arg(inst, 0);
 
 			struct val v =
-				*fstack_val_at(&c->constants, constant_idx);
+				*fstack_vals_at(&c->constants, constant_idx);
 
 			if (IS_OBJ(v)) {
 				struct obj *new_obj = obj_clone(AS_OBJ(v));
@@ -276,7 +274,7 @@ static int vm_run(struct vm *vm)
 			uint32_t ident_id = get_u8_or_u24_arg(inst, 0);
 
 			struct val *current =
-				fhashmap_global_get2_mut(&vm->globals, &ident_id);
+				fhmap_globals_get2_mut(&vm->globals, &ident_id);
 
 			switch (inst.op) {
 			case OP_DEFINE_GLOBAL:
@@ -285,9 +283,9 @@ static int vm_run(struct vm *vm)
 					runtime_error("variable is already defined");
 
 				struct val v = pop(vm);
-				fhashmap_global_xinsert2(&vm->globals,
-							 &ident_id,
-							 &v);
+				fhmap_globals_xinsert2(&vm->globals,
+						       &ident_id,
+						       &v);
 
 				break;
 
@@ -318,8 +316,8 @@ static int vm_run(struct vm *vm)
 		case OP_SET_LOCAL:
 		case OP_SET_LOCAL_LONG: {
 			size_t slot = get_u8_or_u24_arg(inst, 0);
-			struct val *v = fstack_val_at_mut(&vm->stack,
-							  vm->current.fp + slot);
+			struct val *v = fstack_vals_at_mut(&vm->stack,
+							   vm->current.fp + slot);
 
 			if (inst.op == OP_GET_LOCAL || inst.op == OP_GET_LOCAL_LONG)
 				xpush(vm, v);
@@ -369,8 +367,8 @@ static int vm_run(struct vm *vm)
 			struct val *v;
 
 			if (upval->is_local)
-				v = fstack_val_at_mut(&vm->stack,
-						      upval->location.local);
+				v = fstack_vals_at_mut(&vm->stack,
+						       upval->location.local);
 			else
 				v = &upval->location.captured;
 
@@ -386,8 +384,8 @@ static int vm_run(struct vm *vm)
 		case OP_CLOSURE_LONG: {
 			size_t constant_idx = get_u8_or_u24_arg(inst, 0);
 
-			struct val v = *fstack_val_at(&c->constants,
-						      constant_idx);
+			struct val v = *fstack_vals_at(&c->constants,
+						       constant_idx);
 
 			clox_assert(IS_OBJ(v) && IS_OBJ_TYPE(AS_OBJ(v), OBJ_FUNCTION),
 				    "can only create closures from functions");

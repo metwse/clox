@@ -6,10 +6,10 @@
 #include <stddef.h>
 
 
-#define T char, uint32_t, ident_name_to_id
-#include "../vendor/libfun/include/hashmap.h"
+#define T char, uint32_t, ident_ids
+#include "../vendor/libfun/include/hmap.h"
 
-#define T char *, ident_id_to_name
+#define T char *, ident_names
 #include "../vendor/libfun/include/stack.h"
 
 
@@ -17,9 +17,9 @@ struct scanner {
 	const char *cur;
 
 	/* identifier name -> id map */
-	struct fhashmap_ident_name_to_id ident_id_map;
+	struct fhmap_ident_ids ident_ids;
 	/* identifier id -> name map */
-	struct fstack_ident_id_to_name ident_id_rev_map;
+	struct fstack_ident_names ident_names;
 
 	uint32_t last_id;
 

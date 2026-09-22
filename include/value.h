@@ -42,7 +42,7 @@ struct val {
 };
 
 
-#define T struct val, val
+#define T struct val, vals
 #include "../vendor/libfun/include/stack.h"
 
 

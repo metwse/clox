@@ -15,20 +15,21 @@ struct call_frame {
 	size_t fp;  /* frame pointer */
 };
 
-#define T uint32_t, struct val, global
-#include "../vendor/libfun/include/hashmap.h"
+#define T uint32_t, struct val, globals
+#include "../vendor/libfun/include/hmap.h"
 
-#define T struct call_frame, call_frame
+#define T struct call_frame, call_frames
 #include "../vendor/libfun/include/stack.h"
 
 
 /* The clox vm. */
 struct vm {
 	struct call_frame current;
-	struct fstack_call_frame frames;
-	struct fstack_val stack;
+	struct fstack_call_frames frames;
+
+	struct fstack_vals stack;
 	/* struct fstack objects; */
-	struct fhashmap_global globals;
+	struct fhmap_globals globals;
 	struct obj_upvalue *open_upvalues;
 };
 

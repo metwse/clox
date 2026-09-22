@@ -575,10 +575,11 @@ static void compile_function_decl(struct chunk *c,
 
 	uint32_t ident_id = SEMINFO_IDENT_ID(rchild(n, 1));
 
+	chunk_compact(&new_chunk);
 	struct obj_function *fun = obj_function_new(new_chunk,
 						    ident_id,
 						    arity,
-						    fstack_upvalue_len(&enclosed.upvalues));
+						    fstack_upvalues_len(&enclosed.upvalues));
 
 	struct val v = OBJ_VAL((struct obj *) fun);
 	uint32_t constant_id = chunk_xpush_constant(c, &v);
@@ -641,5 +642,6 @@ struct chunk chunk_xcompile(struct rdesc_node n)
 
 	compiler_destroy(&current);
 
+	chunk_compact(&c);
 	return c;
 }

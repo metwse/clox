@@ -29,7 +29,7 @@ struct chunk {
 	struct fstack_chunk chunk;
 	struct fstack_chunk_line chunk_line;
 
-	struct fstack_val constants;
+	struct fstack_vals constants;
 };
 
 
