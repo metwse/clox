@@ -12,8 +12,13 @@
 #include <stdlib.h>
 
 
-void vm_xinit(struct vm *vm)
+void vm_xinit(struct vm *vm,
+	      struct str_pool *idents,
+	      struct str_pool *str_literals)
 {
+	vm->idents = idents;
+	vm->str_literals = str_literals;
+
 	fstack_call_frames_xinit(&vm->frames);
 	fstack_vals_xinit(&vm->stack);
 	/* fstack_xinit(&vm->objects, sizeof(struct obj *)); */
@@ -73,7 +78,7 @@ static bool values_equal(struct val a, struct val b)
 	return false; // unreachable;
 }
 
-static void print_val(struct val v)
+static void print_val(struct vm *vm, struct val v)
 {
 	switch (v.type) {
 	case VAL_NUM:
@@ -89,7 +94,7 @@ static void print_val(struct val v)
 		break;
 
 	case VAL_OBJ:
-		obj_print(AS_OBJ(v));
+		obj_print(AS_OBJ(v), vm);
 		break;
 	}
 }
@@ -207,7 +212,7 @@ static int vm_run(struct vm *vm)
 		switch (inst.op) {
 		case OP_RETURN: {
 			if (fstack_call_frames_len(&vm->frames) == 0) {
-				print_val(pop(vm));
+				print_val(vm, pop(vm));
 
 				clox_assert(fstack_vals_len(&vm->stack) == 0,
 					    "inconsistent stack");
@@ -233,7 +238,7 @@ static int vm_run(struct vm *vm)
 		}
 
 		case OP_PRINT:
-			print_val(pop(vm));
+			print_val(vm, pop(vm));
 			break;
 
 		case OP_POP:

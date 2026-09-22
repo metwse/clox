@@ -2,6 +2,7 @@
 #define INTERPRETER_H
 
 #include "scanner.h"
+#include "string_pool.h"
 #include "vm.h"
 
 #include "../vendor/rdesc/include/rdesc.h"
@@ -9,6 +10,8 @@
 
 /* The clox interpreter. */
 struct interpreter {
+	struct str_pool idents;
+	struct str_pool str_literals;
 	struct scanner scanner;
 	struct rdesc parser;
 	struct vm vm;

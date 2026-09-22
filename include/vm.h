@@ -3,6 +3,7 @@
 
 #include "chunk.h"
 #include "object.h"
+#include "string_pool.h"
 
 #include <stddef.h>
 
@@ -24,6 +25,9 @@ struct call_frame {
 
 /* The clox vm. */
 struct vm {
+	struct str_pool *idents;
+	struct str_pool *str_literals;
+
 	struct call_frame current;
 	struct fstack_call_frames frames;
 
@@ -35,7 +39,9 @@ struct vm {
 
 
 /* Initialize a new VM. */
-void vm_xinit(struct vm *);
+void vm_xinit(struct vm *,
+	      struct str_pool *idents,
+	      struct str_pool *str_literals);
 
 /* Free the resources owned by the VM. */
 void vm_destroy(struct vm *);

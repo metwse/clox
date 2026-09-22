@@ -66,8 +66,8 @@ enum nt_id {
 
 union seminfo_data {
 	uint32_t ident_id;
+	uint32_t str_literal_id;
 	double num;
-	char *str;
 };
 
 struct seminfo {
@@ -83,8 +83,6 @@ extern const char *const nt_names[NT_COUNT];
 
 extern const struct rdesc_grammar_symbol production_rules
 	[NT_COUNT][NT_MAX_ALTERNATIVE_COUNT + 1][NT_MAX_ALTERNATIVE_SIZE + 1];
-
-void token_destroyer(uint16_t, void *);
 
 
 #endif

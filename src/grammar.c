@@ -216,11 +216,3 @@ alt	TK(IDENT)
 /* <function-optargs> ::= */
 	ropt(NT(FUNCTION_ARGS))
 };
-
-void token_destroyer(uint16_t id, void *seminfo)
-{
-	if (id == TK_STR) {
-		free(((struct seminfo *) seminfo)->seminfo.str);
-	}
-
-}

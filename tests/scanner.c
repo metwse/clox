@@ -1,8 +1,10 @@
 #include "../include/common.h"
 #include "../include/grammar.h"
 #include "../include/scanner.h"
+#include "../include/string_pool.h"
 
 #include <stddef.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -33,9 +35,8 @@ void test_input(struct scanner *s,
 				    "num missmatch");
 
 		if (tk_id == TK_STR) {
-			clox_assert(strcmp(seminfo.seminfo.str, seminfos[i].str) == 0,
+			clox_assert(seminfo.seminfo.str_literal_id == seminfos[i].str_literal_id,
 				    "str missmatch");
-			free(seminfo.seminfo.str);
 		}
 	}
 
@@ -43,13 +44,33 @@ void test_input(struct scanner *s,
 	clox_assert(tk_id == TK_EOF || tk_id == TK_INVALID, "still has tokens");
 }
 
+void test_str_pool_id(struct str_pool *p, uint32_t id, const char *str)
+{
+	const char *out_chars;
+	size_t out_len;
+
+	str_pool_get_chars(p, id, &out_chars, &out_len);
+
+	if (id == UINT32_MAX)
+		clox_assert(out_len == 0,
+			    "zero-length string should have id UINT32_MAX");
+	else
+		clox_assert(memcmp(str, out_chars, out_len) == 0,
+			    "string pool missmatch");
+}
+
 
 int main(void)
 {
 	scanner_xstatic_init();
 
+	struct str_pool idents;
+	struct str_pool str_literals;
+	str_pool_xinit(&idents);
+	str_pool_xinit(&str_literals);
+
 	struct scanner s;
-	scanner_xinit(&s);
+	scanner_xinit(&s, &idents, &str_literals);
 
 	test_input(&s,
 		   "    test  123 test2 < =  \n test   ; 321.123 >= >",
@@ -66,9 +87,8 @@ int main(void)
 		   },
 		   11);
 
-	clox_assert(strcmp(scanner_get_ident_name(&s, 0), "test") == 0 &&
-		    strcmp(scanner_get_ident_name(&s, 1), "test2") == 0,
-		    "cannot get ident name by id");
+	test_str_pool_id(&idents, 0, "test");
+	test_str_pool_id(&idents, 1, "test2");
 
 	test_input(&s,
 		   "    valid if ınvalıd ",
@@ -81,19 +101,25 @@ int main(void)
 		   3);
 
 	test_input(&s,
-		   " \"string\" \"\\\"\" \"\" \"\\\\\" \"\\\\\\\"\"",
+		   " \"string\" \"\\\"\" \"\" \"\\\\\" \"\\\\\\\"\" \"string\"",
 		   (enum tk_id[]) {
-			TK_STR, TK_STR, TK_STR, TK_STR, TK_STR
+			TK_STR, TK_STR, TK_STR, TK_STR, TK_STR, TK_STR
 		   },
 		   (union seminfo_data[]) {
-			{ .str = "string" },
-			{ .str = "\"" },
-			{ .str = "" },
-			{ .str = "\\" },
-			{ .str = "\\\"" },
+			{ .str_literal_id = 0 },
+			{ .str_literal_id = 1 },
+			{ .str_literal_id = UINT32_MAX },
+			{ .str_literal_id = 2 },
+			{ .str_literal_id = 3 },
+			{ .str_literal_id = 0 },
 		   },
-		   5);
+		   6);
 
+	test_str_pool_id(&str_literals, 0, "string");
+	test_str_pool_id(&str_literals, 1, "\"");
+	test_str_pool_id(&str_literals, UINT32_MAX, "");
+	test_str_pool_id(&str_literals, 2, "\\");
+	test_str_pool_id(&str_literals, 3, "\\\"");
 
 	test_input(&s,
 		   "\"unterminated string ",
@@ -115,7 +141,8 @@ int main(void)
 
 	scanner_new_line(&s);
 
-	scanner_destroy(&s);
+	str_pool_destroy(&idents);
+	str_pool_destroy(&str_literals);
 
 	scanner_static_destroy();
 }

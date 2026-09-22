@@ -2,6 +2,7 @@
 #include "../include/grammar.h"
 #include "../include/interpreter.h"
 #include "../include/scanner.h"
+#include "../include/string_pool.h"
 
 #include "../vendor/rdesc/include/grammar.h"
 #include "../vendor/rdesc/include/rdesc.h"
@@ -34,12 +35,15 @@ void interpreter_xinit(struct interpreter *i)
 	clox_assert(rdesc_init(&i->parser,
 			       &clox,
 			       sizeof(struct seminfo),
-			       token_destroyer) == 0,
+			       NULL) == 0,
 		   "cannot initialize the parser");
 
-	scanner_xinit(&i->scanner);
+	str_pool_xinit(&i->idents);
+	str_pool_xinit(&i->str_literals);
 
-	vm_xinit(&i->vm);
+	scanner_xinit(&i->scanner, &i->idents, &i->str_literals);
+
+	vm_xinit(&i->vm, &i->idents, &i->str_literals);
 
 	clox_assert(rdesc_start(&i->parser, NT_DECL) == 0,
 		    "cannot start rdesc");
@@ -47,9 +51,12 @@ void interpreter_xinit(struct interpreter *i)
 
 void interpreter_destroy(struct interpreter *i)
 {
-	rdesc_destroy(&i->parser);
-	scanner_destroy(&i->scanner);
 	vm_destroy(&i->vm);
+
+	str_pool_destroy(&i->idents);
+	str_pool_destroy(&i->str_literals);
+
+	rdesc_destroy(&i->parser);
 }
 
 int interpreter_run(struct interpreter *i, const char *source)

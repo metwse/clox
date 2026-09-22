@@ -26,8 +26,8 @@ _default: $(TARGET)
 CFLAGS_COMMON = -std=c11 -Wall -Wextra -pedantic
 
 CFLAGS_release = $(CFLAGS_COMMON) -O3 -flto
-CFLAGS_debug = $(CFLAGS_COMMON) -O0 -g3
-CFLAGS_test = $(CFLAGS_COMMON) -O0 -g3 --coverage
+CFLAGS_debug = $(CFLAGS_COMMON) -O0 -g3 -DLIBFUN_ASSERTIONS
+CFLAGS_test = $(CFLAGS_COMMON) -O0 -g3 --coverage -DLIBFUN_DEBUG_ASSERTIONS
 
 CFLAGS = $(CFLAGS_$(MODE))
 
@@ -48,7 +48,7 @@ $(LIBFUN_DIR)/libfun.mk: | $(LIBFUN_DIR)/
 	cd $(LIBFUN_DIR)/ && \
 		git init -q && \
 		git remote add origin https://github.com/metwse/libfun.git && \
-		git fetch --depth 1 origin e9858856d4f2f3c192c7d998146c0b02d3c4e0f4 && \
+		git fetch --depth 1 origin 23c1d7807375913e32b5b3207058e5984519e31f && \
 		git checkout -q FETCH_HEAD
 
 $(RDESC_DIR)/rdesc.mk:

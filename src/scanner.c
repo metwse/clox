@@ -1,6 +1,7 @@
 #include "../include/common.h"
 #include "../include/grammar.h"
 #include "../include/scanner.h"
+#include "../include/string_pool.h"
 
 #define T char, enum tk_id, keywords
 #include "../vendor/libfun/include/hmap.h"
@@ -37,29 +38,16 @@ void scanner_static_destroy(void)
 	fhmap_keywords_destroy(&keywords);
 }
 
-void scanner_xinit(struct scanner *s)
+void scanner_xinit(struct scanner *s,
+		   struct str_pool *idents,
+		   struct str_pool *str_literals)
 {
 	s->cur = NULL;
 
-	fhmap_ident_ids_xinit(&s->ident_ids);
-	fstack_ident_names_xinit(&s->ident_names);
+	s->idents = idents;
+	s->str_literals = str_literals;
 
-	s->last_id = -1;
 	s->line = s->col = 1;
-}
-
-void scanner_destroy(struct scanner *s)
-{
-	fhmap_ident_ids_destroy(&s->ident_ids);
-
-	for (size_t i = 0;
-	     i < fstack_ident_names_len(&s->ident_names);
-	     i++) {
-		char *ident_name =
-			*fstack_ident_names_at_mut(&s->ident_names, i);
-		free(ident_name);
-	}
-	fstack_ident_names_destroy(&s->ident_names);
 }
 
 void scanner_feed(struct scanner *s, const char *buf)
@@ -72,11 +60,6 @@ void scanner_new_line(struct scanner *s)
 	s->cur = NULL;
 	s->line++;
 	s->col = 1;
-}
-
-const char *scanner_get_ident_name(const struct scanner *s, size_t id)
-{
-	return *fstack_ident_names_at(&s->ident_names, id);
 }
 
 /* Regex helpers. */
@@ -161,31 +144,11 @@ static void collect_ident_or_keyword(struct scanner *s,
 
 	const enum tk_id *keyword_id_ptr =
 		fhmap_keywords_get(&keywords, start, ident_len);
-	if (keyword_id_ptr) {
+	if (keyword_id_ptr)
 		return_tk(*keyword_id_ptr);
-	}
 
-	const uint32_t *ident_id = fhmap_ident_ids_get(&s->ident_ids,
-						       start,
-						       ident_len);
-	if (ident_id == NULL) {
-		uint32_t new_ident_id = ++s->last_id;
-
-		fhmap_ident_ids_xinsert(&s->ident_ids, start,
-					ident_len,
-					&new_ident_id);
-
-		char *ident_name = malloc(ident_len + 1);
-		clox_assert(ident_name, "memory allocation for ident_name");
-		ident_name[ident_len] = '\0';
-		memcpy(ident_name, start, ident_len);
-
-		fstack_ident_names_xpush(&s->ident_names, &ident_name);
-
-		out_seminfo->seminfo.ident_id = new_ident_id;
-	} else {
-		out_seminfo->seminfo.ident_id = *ident_id;
-	}
+	uint32_t ident_id = str_pool_xget_id(s->idents, start, ident_len);
+	out_seminfo->seminfo.ident_id = ident_id;
 
 	return_tk(TK_IDENT);
 }
@@ -247,19 +210,23 @@ static void collect_str(struct scanner *s,
 	if (peek(s) == '"') {
 		advance(s);  /* consume the second " */
 
-		char *str = malloc(str_len + 1);
-		clox_assert(str, "memory allocation for str");
-		str[str_len] = '\0';
+		char escaped_str[str_len];
+		size_t escaped_str_len;
 
-		for (size_t i = 0; i < str_len; i++) {
+		for (escaped_str_len = 0;
+		     escaped_str_len < str_len;
+		     escaped_str_len++) {
 			if (*start == '\\')
 				start++;
 
-			str[i] = *start;
+			escaped_str[escaped_str_len] = *start;
 			start++;
 		}
 
-		out_seminfo->seminfo.str = str;
+		uint32_t str_literal_id = str_pool_xget_id(s->str_literals,
+							   escaped_str,
+							   escaped_str_len);
+		out_seminfo->seminfo.str_literal_id = str_literal_id;
 		return_tk(TK_STR);
 	}
 

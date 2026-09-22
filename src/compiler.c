@@ -21,7 +21,7 @@
 
 #define SEMINFO_NUM(n) (SEMINFO(n).num)
 
-#define SEMINFO_STR(n) (SEMINFO(n).str)
+#define SEMINFO_STR_LITERAL_ID(n) (SEMINFO(n).str_literal_id)
 
 #define SEMINFO_IDENT_ID(n) (SEMINFO(n).ident_id)
 
@@ -249,9 +249,9 @@ static void compile_expression(struct chunk *c,
 			break;
 
 		case 1: {
-			char *chars = SEMINFO_STR(rchild(n, 0));
-			struct obj_string *obj = obj_string_new(chars,
-								strlen(chars));
+			struct obj_str_literal *obj =
+				obj_str_literal_new(
+					SEMINFO_STR_LITERAL_ID(rchild(n, 0)));
 
 			emit_const(OBJ_VAL((struct obj *) obj));
 			break;
