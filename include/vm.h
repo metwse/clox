@@ -4,9 +4,6 @@
 #include "chunk.h"
 #include "object.h"
 
-#include "../vendor/libfun/include/hashmap.h"
-#include "../vendor/libfun/include/stack.h"
-
 #include <stddef.h>
 
 
@@ -18,13 +15,20 @@ struct call_frame {
 	size_t fp;  /* frame pointer */
 };
 
+#define T uint32_t, struct val, global
+#include "../vendor/libfun/include/hashmap.h"
+
+#define T struct call_frame, call_frame
+#include "../vendor/libfun/include/stack.h"
+
+
 /* The clox vm. */
 struct vm {
 	struct call_frame current;
-	struct fstack frames;
-	struct fstack stack;
-	struct fstack objects;
-	struct fhashmap globals;
+	struct fstack_call_frame frames;
+	struct fstack_val stack;
+	/* struct fstack objects; */
+	struct fhashmap_global globals;
 	struct obj_upvalue *open_upvalues;
 };
 

@@ -4,7 +4,6 @@
 #include "value.h"
 #include "instructions.h"
 
-#include "../vendor/libfun/include/stack.h"
 #include "../vendor/rdesc/include/rdesc.h"
 
 #include <stddef.h>
@@ -12,13 +11,25 @@
 #include <stdio.h>
 
 
+struct chunk_line {
+	int line;
+	int count;
+};
+
+#define T struct chunk_line, chunk_line
+#include "../vendor/libfun/include/stack.h"
+
+#define T uint8_t, chunk
+#include "../vendor/libfun/include/stack.h"
+
+
 /* Compiled chunk. */
 struct chunk {
 	/* clox instructions. */
-	struct fstack chunk;
-	struct fstack chunk_line_info;
+	struct fstack_chunk chunk;
+	struct fstack_chunk_line chunk_line;
 
-	struct fstack constants;
+	struct fstack_val constants;
 };
 
 

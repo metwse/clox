@@ -48,7 +48,7 @@ $(LIBFUN_DIR)/libfun.mk: | $(LIBFUN_DIR)/
 	cd $(LIBFUN_DIR)/ && \
 		git init -q && \
 		git remote add origin https://github.com/metwse/libfun.git && \
-		git fetch --depth 1 origin 97ea792a15f341686c7058ba2b8d7ed4a7e0b62f && \
+		git fetch --depth 1 origin da6f9f589b322e455a9eca2ba4ac9da50a194290 && \
 		git checkout -q FETCH_HEAD
 
 $(RDESC_DIR)/rdesc.mk:

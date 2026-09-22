@@ -3,19 +3,23 @@
 
 #include "grammar.h"
 
-#include "../vendor/libfun/include/hashmap.h"
-#include "../vendor/libfun/include/stack.h"
-
 #include <stddef.h>
+
+
+#define T char, uint32_t, ident_name_to_id
+#include "../vendor/libfun/include/hashmap.h"
+
+#define T char *, ident_id_to_name
+#include "../vendor/libfun/include/stack.h"
 
 
 struct scanner {
 	const char *cur;
 
 	/* identifier name -> id map */
-	struct fhashmap ident_id_map;
+	struct fhashmap_ident_name_to_id ident_id_map;
 	/* identifier id -> name map */
-	struct fstack ident_id_rev_map;
+	struct fstack_ident_id_to_name ident_id_rev_map;
 
 	uint32_t last_id;
 

@@ -3,8 +3,6 @@
 
 #include "../include/chunk.h"
 
-#include "../vendor/libfun/include/stack.h"
-
 #include <stdint.h>
 
 
@@ -55,14 +53,6 @@
 	} while (0)
 
 
-struct compiler {
-	struct compiler *enclosing;
-	int line;
-	struct fstack locals;
-	struct fstack upvalues;
-	int scope_depth;
-};
-
 struct local {
 	uint32_t ident_id;
 	int depth;
@@ -73,6 +63,22 @@ struct upvalue {
 	uint32_t index;
 	bool is_local;
 };
+
+#define T struct local, local
+#include "../vendor/libfun/include/stack.h"
+
+#define T struct upvalue, upvalue
+#include "../vendor/libfun/include/stack.h"
+
+
+struct compiler {
+	struct compiler *enclosing;
+	int line;
+	struct fstack_local locals;
+	struct fstack_upvalue upvalues;
+	int scope_depth;
+};
+
 
 void chunk_xinit(struct chunk *);
 
