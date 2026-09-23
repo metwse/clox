@@ -44,8 +44,10 @@
 /* warn unused result */
 #if defined(__GNUC__) || defined(__clang__)
 #define _wur __attribute__((warn_unused_result))
+#define _unused __attribute__((unused))
 #else
 #define _wur
+#define _unused
 #endif
 
 

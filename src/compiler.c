@@ -568,21 +568,18 @@ static void compile_function_decl(struct chunk *c,
 	c = hold_c;
 	current = hold_compiler;
 
-	uint32_t function_name_str_id = SEMINFO_STR_ID(rchild(n, 1));
-	/* TODO: resolve global_id by str_id */
-	uint32_t global_id = function_name_str_id;
-
 	chunk_compact(&new_chunk);
 	struct obj_function *fun = obj_function_new(new_chunk,
 						    arity,
-						    fstack_upvalues_len(&enclosed.upvalues),
-						    function_name_str_id);
+						    fstack_upvalues_len(&enclosed.upvalues));
 
 	struct val v = OBJ_VAL((struct obj *) fun);
 	uint32_t constant_id = chunk_xpush_constant(c, &v);
 
 	compiler_emit_closure_inst(current, &enclosed, c, constant_id);
-	compiler_emit_define_variable_inst(current, c, global_id);
+
+	uint32_t str_id = SEMINFO_STR_ID(rchild(n, 1));
+	compiler_emit_define_variable_inst(current, c, str_id);
 
 	compiler_destroy(&enclosed);
 }

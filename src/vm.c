@@ -10,6 +10,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 
 void vm_xinit(struct vm *vm,
@@ -103,7 +104,10 @@ static bool is_falsey(struct val v)
 
 static bool is_callable(struct val v)
 {
-	return IS_OBJ(v) && IS_OBJ_TYPE(AS_OBJ(v), OBJ_CLOSURE);
+	return IS_OBJ(v) && (
+		IS_OBJ_TYPE(AS_OBJ(v), OBJ_CLOSURE) ||
+		IS_OBJ_TYPE(AS_OBJ(v), OBJ_NATIVE_FUNCTION)
+	);
 }
 
 /* TODO: query line info */
@@ -128,24 +132,56 @@ static void recover_runtime_error(struct vm *vm);
 		vm->current.pc += inst_len(inst); \
 	} while (0)
 
-static int call(struct vm *vm, struct obj_closure *closure, uint32_t arg_count)
+static int call(struct vm *vm, struct obj *callable, uint32_t arg_count)
 {
-	const struct obj_function *function = closure->function;
+	switch (OBJ_TYPE(callable)) {
+	case OBJ_CLOSURE: {
+		struct obj_closure *closure = AS_CLOSURE(callable);
+		const struct obj_function *function = closure->function;
 
-	if (arg_count != function->arity) {
-		runtime_error("expected %"PRIu32 " arguments, got %"PRIu32,
-			      function->arity, arg_count);
+		if (arg_count != function->arity) {
+			runtime_error("expected %"PRIu32 " arguments, got %"PRIu32,
+					function->arity, arg_count);
+		}
+
+		fstack_call_frames_xpush(&vm->frames, &vm->current);
+
+		vm->current = (struct call_frame) {
+			.closure = closure,
+			.c = &function->chunk,
+			.fp = fstack_vals_len(&vm->stack) - arg_count,
+			.pc = 0,
+			.arity = arg_count,
+		};
+
+		break;
 	}
 
-	fstack_call_frames_xpush(&vm->frames, &vm->current);
+	case OBJ_NATIVE_FUNCTION: {
+		struct obj_native_function *native_function =
+			AS_NATIVE_FUNCTION(callable);
 
-	vm->current = (struct call_frame) {
-		.closure = closure,
-		.c = &function->chunk,
-		.fp = fstack_vals_len(&vm->stack) - arg_count,
-		.pc = 0,
-		.arity = arg_count,
-	};
+		struct val res;
+		if (arg_count > 0) {
+			const struct val *popped_args = fstack_vals_multipop(&vm->stack,
+					arg_count);
+
+			struct val args[arg_count];
+			memcpy(args, popped_args, sizeof(struct val) * arg_count);
+
+			res = native_function->function(vm, args, arg_count);
+		} else {
+			res = native_function->function(vm, NULL, 0);
+		}
+
+		pop(vm);  /* pop the callable */
+		xpush(vm, &res);
+
+		break;
+	}
+
+	default: break;  // GCOVR_EXCL: unreachable
+	}
 
 	return 0;
 }
@@ -170,7 +206,7 @@ static struct obj_upvalue *capture_upvalue(struct vm *vm, size_t local)
 	if (upval != NULL && upval->location.local == local)
 		return upval;
 
-	struct obj_upvalue *new_upval = obj_upcalue_new(local);
+	struct obj_upvalue *new_upval = obj_upvalue_new(local);
 	new_upval->next = upval;
 
 	if (prev == NULL)
@@ -343,9 +379,7 @@ static int vm_run(struct vm *vm)
 			if (!is_callable(v))
 				runtime_error("expression result is not callable");
 
-			struct obj_closure *closure = AS_CLOSURE(AS_OBJ(v));
-
-			if (call(vm, closure, arg_count))
+			if (call(vm, AS_OBJ(v), arg_count))
 				return 1;
 
 			break;

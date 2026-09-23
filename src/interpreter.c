@@ -1,3 +1,6 @@
+#include "globals_internal.h"
+
+#include "../include/builtin_functions.h"
 #include "../include/common.h"
 #include "../include/globals.h"
 #include "../include/grammar.h"
@@ -7,6 +10,9 @@
 
 #include "../vendor/rdesc/include/grammar.h"
 #include "../vendor/rdesc/include/rdesc.h"
+
+#include <stdint.h>
+#include <string.h>
 
 
 struct rdesc_grammar clox;
@@ -49,6 +55,22 @@ void interpreter_xinit(struct interpreter *i)
 
 	clox_assert(rdesc_start(&i->parser, NT_DECL) == 0,
 		    "cannot start rdesc");
+
+	for (size_t j = 0; j < builtin_functions_len; j++) {
+		struct builtin_function builtin_function = builtin_functions[j];
+
+		uint32_t str_id = str_pool_xget_id(&i->strings,
+						   builtin_function.name,
+						   strlen(builtin_function.name));
+		uint32_t global_id = globals_xget_global_id(&i->globals, str_id);
+
+		struct obj_native_function *native_function =
+			obj_native_function_new(builtin_function.function);
+
+		globals_define(&i->globals,
+			       global_id,
+			       OBJ_VAL((struct obj *) native_function));
+	}
 }
 
 void interpreter_destroy(struct interpreter *i)

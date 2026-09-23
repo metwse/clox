@@ -15,16 +15,15 @@ struct vm;  /* defined in vm.h */
 
 #define AS_FUNCTION(o) ((struct obj_function *) o)
 #define AS_CLOSURE(o) ((struct obj_closure *) o)
-#define AS_STRING(o) ((struct obj_string *) o)
-#define AS_CSTRING(o) (((struct obj_string *) o)->chars)
 #define AS_STR_LITERAL(o) ((struct obj_str_literal *) o)
+#define AS_NATIVE_FUNCTION(o) ((struct obj_native_function *) o)
 
 
 enum obj_type {
 	OBJ_FUNCTION,
 	OBJ_CLOSURE,
 	OBJ_UPVALUE,
-	OBJ_STRING,
+	OBJ_NATIVE_FUNCTION,
 	OBJ_STR_LITERAL,
 };
 
@@ -33,11 +32,15 @@ struct obj {
 };
 
 
+typedef struct val native_function_t(struct vm *vm,
+				     struct val argv[],
+				     uint32_t argc);
+
+
 struct obj_function {
 	struct obj obj;
 	struct chunk chunk;
 	uint32_t arity;
-	uint32_t name_str_id;
 	uint32_t upvalue_count;
 };
 
@@ -57,10 +60,9 @@ struct obj_closure {
 	struct obj_upvalue **upvalues;
 };
 
-struct obj_string {
+struct obj_native_function {
 	struct obj obj;
-	size_t len;
-	char *chars;
+	native_function_t *function;
 };
 
 struct obj_str_literal {
@@ -80,14 +82,13 @@ bool obj_is_equal(const struct obj *a, const struct obj *b);
 
 struct obj_function *obj_function_new(struct chunk,
 				      uint32_t arity,
-				      uint32_t upvalue_count,
-				      uint32_t name_str_id);
+				      uint32_t upvalue_count);
 
-struct obj_closure *obj_closure_new(const struct obj_function *);
+struct obj_closure *obj_closure_new(const struct obj_function *function);
 
-struct obj_upvalue *obj_upcalue_new(size_t location);
+struct obj_upvalue *obj_upvalue_new(size_t location);
 
-struct obj_string *obj_string_new(char *, size_t len);
+struct obj_native_function *obj_native_function_new(native_function_t *native_function);
 
 struct obj_str_literal *obj_str_literal_new(uint32_t str_literal_id);
 
