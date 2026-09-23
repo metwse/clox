@@ -89,7 +89,7 @@ void obj_print(const struct obj *o, const struct vm *vm)
 		const char *out_chars;
 		size_t out_len;
 
-		clox_assert(str_pool_get_chars(vm->str_literals,
+		clox_assert(str_pool_get_chars(vm->strings,
 					       AS_STR_LITERAL(o)->id,
 					       &out_chars,
 					       &out_len),

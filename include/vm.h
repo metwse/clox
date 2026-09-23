@@ -25,8 +25,7 @@ struct call_frame {
 
 /* The clox vm. */
 struct vm {
-	struct str_pool *idents;
-	struct str_pool *str_literals;
+	struct str_pool *strings;
 
 	struct call_frame current;
 	struct fstack_call_frames frames;
@@ -39,9 +38,7 @@ struct vm {
 
 
 /* Initialize a new VM. */
-void vm_xinit(struct vm *,
-	      struct str_pool *idents,
-	      struct str_pool *str_literals);
+void vm_xinit(struct vm *, struct str_pool *strings);
 
 /* Free the resources owned by the VM. */
 void vm_destroy(struct vm *);

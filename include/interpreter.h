@@ -10,8 +10,7 @@
 
 /* The clox interpreter. */
 struct interpreter {
-	struct str_pool idents;
-	struct str_pool str_literals;
+	struct str_pool strings;
 	struct scanner scanner;
 	struct rdesc parser;
 	struct vm vm;

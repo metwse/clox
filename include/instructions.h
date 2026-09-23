@@ -123,7 +123,10 @@ size_t inst_arg_len(enum opcode op);
 size_t inst_len(struct inst);
 
 /* Debug printing an instruction. */
-void inst_print(struct inst, FILE *out, int line, const struct str_pool *idents);
+void inst_print(struct inst,
+		FILE *out,
+		int line,
+		const struct str_pool *strings);
 
 /* Get one byte argument. */
 uint8_t inst_get_u8_arg(struct inst, size_t offset);

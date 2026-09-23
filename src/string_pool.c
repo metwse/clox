@@ -6,14 +6,18 @@
 void str_pool_xinit(struct str_pool *p)
 {
 	p->last_id = 0;
-	fhmap_str_ids_xinit(&p->ids);
-	fhmap_str_chars_xinit(&p->chars);
+	for (int i = 0; i < 3; i++) {
+		fhmap_str_ids_xinit(&p->maps[i].ids);
+		fhmap_str_chars_xinit(&p->maps[i].chars);
+	}
 }
 
 void str_pool_destroy(struct str_pool *p)
 {
-	fhmap_str_ids_destroy(&p->ids);
-	fhmap_str_chars_destroy(&p->chars);
+	for (int i = 0; i < 3; i++) {
+		fhmap_str_ids_destroy(&p->maps[i].ids);
+		fhmap_str_chars_destroy(&p->maps[i].chars);
+	}
 }
 
 uint32_t str_pool_xget_id(struct str_pool *p, const char *chars, size_t len)
@@ -21,14 +25,24 @@ uint32_t str_pool_xget_id(struct str_pool *p, const char *chars, size_t len)
 	if (len == 0)
 		return UINT32_MAX;
 
-	const uint32_t *id = fhmap_str_ids_get(&p->ids, chars, len);
+	struct fhmap_str_ids *m_ids = &p->maps[0].ids;
+	struct fhmap_str_chars *m_chars = &p->maps[0].chars;
+	if (8 < len && len < 20) {
+		m_ids = &p->maps[1].ids;
+		m_chars = &p->maps[1].chars;
+	} else if (20 <= len) {
+		m_ids = &p->maps[2].ids;
+		m_chars = &p->maps[2].chars;
+	}
+
+	const uint32_t *id = fhmap_str_ids_get(m_ids, chars, len);
 
 	if (id == NULL) {
 		uint32_t new_id = p->last_id++;
 
 		struct fhmap_str_ids_entry_mut e;
-		fhmap_str_ids_xinserte(&p->ids, chars, len, &new_id, &e);
-		fhmap_str_chars_xinsert2(&p->chars, &new_id, &e);
+		fhmap_str_ids_xinserte(m_ids, chars, len, &new_id, &e);
+		fhmap_str_chars_xinsert2(m_chars, &new_id, &e);
 
 		return new_id;
 	} else {
@@ -46,8 +60,9 @@ bool str_pool_get_chars(const struct str_pool *p,
 		return true;
 	}
 
-	const struct fhmap_str_ids_entry_mut *e =
-		fhmap_str_chars_get2(&p->chars, &str_id);
+	const struct fhmap_str_ids_entry_mut *e = NULL;
+	for (int i = 0; i < 3 && e == NULL; i++)
+		e = fhmap_str_chars_get2(&p->maps[i].chars, &str_id);
 
 	if (e == NULL) {
 		return false;

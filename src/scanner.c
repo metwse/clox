@@ -38,14 +38,11 @@ void scanner_static_destroy(void)
 	fhmap_keywords_destroy(&keywords);
 }
 
-void scanner_xinit(struct scanner *s,
-		   struct str_pool *idents,
-		   struct str_pool *str_literals)
+void scanner_xinit(struct scanner *s, struct str_pool *strings)
 {
 	s->cur = NULL;
 
-	s->idents = idents;
-	s->str_literals = str_literals;
+	s->strings = strings;
 
 	s->line = s->col = 1;
 }
@@ -147,7 +144,7 @@ static void collect_ident_or_keyword(struct scanner *s,
 	if (keyword_id_ptr)
 		return_tk(*keyword_id_ptr);
 
-	uint32_t ident_id = str_pool_xget_id(s->idents, start, ident_len);
+	uint32_t ident_id = str_pool_xget_id(s->strings, start, ident_len);
 	out_seminfo->seminfo.ident_id = ident_id;
 
 	return_tk(TK_IDENT);
@@ -223,7 +220,7 @@ static void collect_str(struct scanner *s,
 			start++;
 		}
 
-		uint32_t str_literal_id = str_pool_xget_id(s->str_literals,
+		uint32_t str_literal_id = str_pool_xget_id(s->strings,
 							   escaped_str,
 							   escaped_str_len);
 		out_seminfo->seminfo.str_literal_id = str_literal_id;

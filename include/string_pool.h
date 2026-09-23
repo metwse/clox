@@ -12,8 +12,11 @@
 
 /* String deduplication pool. */
 struct str_pool {
-	struct fhmap_str_ids ids;
-	struct fhmap_str_chars chars;
+	/* Hashmaps for various length of strings. */
+	struct {
+		struct fhmap_str_ids ids;
+		struct fhmap_str_chars chars;
+	} maps[3];
 
 	uint32_t last_id;
 };

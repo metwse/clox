@@ -44,7 +44,7 @@ void chunk_destroy(struct chunk *);
 /* Print out disassembled instructions.
  * Use zero `len` for no limit. */
 void chunk_disassemble(const struct chunk *,
-		       const struct str_pool *idents,
+		       const struct str_pool *strings,
 		       FILE *out,
 		       size_t offset,
 		       size_t len);

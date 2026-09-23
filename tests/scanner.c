@@ -64,13 +64,11 @@ int main(void)
 {
 	scanner_xstatic_init();
 
-	struct str_pool idents;
-	struct str_pool str_literals;
-	str_pool_xinit(&idents);
-	str_pool_xinit(&str_literals);
+	struct str_pool strings;
+	str_pool_xinit(&strings);
 
 	struct scanner s;
-	scanner_xinit(&s, &idents, &str_literals);
+	scanner_xinit(&s, &strings);
 
 	test_input(&s,
 		   "    test  123 test2 < =  \n test   ; 321.123 >= >",
@@ -87,8 +85,8 @@ int main(void)
 		   },
 		   11);
 
-	test_str_pool_id(&idents, 0, "test");
-	test_str_pool_id(&idents, 1, "test2");
+	test_str_pool_id(&strings, 0, "test");
+	test_str_pool_id(&strings, 1, "test2");
 
 	test_input(&s,
 		   "    valid if ınvalıd ",
@@ -106,20 +104,20 @@ int main(void)
 			TK_STR, TK_STR, TK_STR, TK_STR, TK_STR, TK_STR
 		   },
 		   (union seminfo_data[]) {
-			{ .str_literal_id = 0 },
-			{ .str_literal_id = 1 },
-			{ .str_literal_id = UINT32_MAX },
-			{ .str_literal_id = 2 },
 			{ .str_literal_id = 3 },
-			{ .str_literal_id = 0 },
+			{ .str_literal_id = 4 },
+			{ .str_literal_id = UINT32_MAX },
+			{ .str_literal_id = 5 },
+			{ .str_literal_id = 6 },
+			{ .str_literal_id = 3 },
 		   },
 		   6);
 
-	test_str_pool_id(&str_literals, 0, "string");
-	test_str_pool_id(&str_literals, 1, "\"");
-	test_str_pool_id(&str_literals, UINT32_MAX, "");
-	test_str_pool_id(&str_literals, 2, "\\");
-	test_str_pool_id(&str_literals, 3, "\\\"");
+	test_str_pool_id(&strings, 3, "string");
+	test_str_pool_id(&strings, 4, "\"");
+	test_str_pool_id(&strings, UINT32_MAX, "");
+	test_str_pool_id(&strings, 5, "\\");
+	test_str_pool_id(&strings, 6, "\\\"");
 
 	test_input(&s,
 		   "\"unterminated string ",
@@ -141,8 +139,7 @@ int main(void)
 
 	scanner_new_line(&s);
 
-	str_pool_destroy(&idents);
-	str_pool_destroy(&str_literals);
+	str_pool_destroy(&strings);
 
 	scanner_static_destroy();
 }

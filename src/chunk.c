@@ -101,9 +101,8 @@ size_t chunk_len(const struct chunk *c)
 	return fstack_chunk_len(&c->chunk);
 }
 
-
 void chunk_disassemble(const struct chunk *c,
-		       const struct str_pool *idents,
+		       const struct str_pool *strings,
 		       FILE *out,
 		       size_t offset,
 		       size_t len)
@@ -131,7 +130,7 @@ void chunk_disassemble(const struct chunk *c,
 		fprintf(out, "%04zu ", offset + i);
 		i += inst_len(inst);
 
-		inst_print(inst, out, prev_line == line ? -1 : line, idents);
+		inst_print(inst, out, prev_line == line ? -1 : line, strings);
 
 		prev_line = line;
 	}

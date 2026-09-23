@@ -38,12 +38,11 @@ void interpreter_xinit(struct interpreter *i)
 			       NULL) == 0,
 		   "cannot initialize the parser");
 
-	str_pool_xinit(&i->idents);
-	str_pool_xinit(&i->str_literals);
+	str_pool_xinit(&i->strings);
 
-	scanner_xinit(&i->scanner, &i->idents, &i->str_literals);
+	scanner_xinit(&i->scanner, &i->strings);
 
-	vm_xinit(&i->vm, &i->idents, &i->str_literals);
+	vm_xinit(&i->vm, &i->strings);
 
 	clox_assert(rdesc_start(&i->parser, NT_DECL) == 0,
 		    "cannot start rdesc");
@@ -53,8 +52,7 @@ void interpreter_destroy(struct interpreter *i)
 {
 	vm_destroy(&i->vm);
 
-	str_pool_destroy(&i->idents);
-	str_pool_destroy(&i->str_literals);
+	str_pool_destroy(&i->strings);
 
 	rdesc_destroy(&i->parser);
 }
@@ -85,7 +83,7 @@ int interpreter_run(struct interpreter *i, const char *source)
 			struct chunk chunk =
 				chunk_xcompile(rdesc_get_root(&i->parser));
 
-			chunk_disassemble(&chunk, &i->idents, stderr, 0, 0);
+			chunk_disassemble(&chunk, &i->strings, stderr, 0, 0);
 
 			if (vm_execute(&i->vm, &chunk))
 				clox_report("execution interrupted due to a "

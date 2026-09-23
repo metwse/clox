@@ -67,12 +67,12 @@ size_t inst_len(struct inst inst)
 
 static void print_ident(uint32_t ident_id,
 			FILE *out,
-			const struct str_pool *idents)
+			const struct str_pool *strings)
 {
 	const char *out_chars;
 	size_t out_len;
 
-	clox_assert(str_pool_get_chars(idents,
+	clox_assert(str_pool_get_chars(strings,
 				       ident_id,
 				       &out_chars,
 				       &out_len),
@@ -84,7 +84,7 @@ static void print_ident(uint32_t ident_id,
 void inst_print(struct inst inst,
 		FILE *out,
 		int line,
-		const struct str_pool *idents)
+		const struct str_pool *strings)
 {
 	bool first = true;
 #define LINE do { \
@@ -132,7 +132,7 @@ void inst_print(struct inst inst,
 	case OP_SET_GLOBAL: {
 		uint32_t ident_id = inst_get_u8_or_u24_arg(inst, 0);
 		fprintf(out, "%"PRIu32" '", ident_id);
-		print_ident(ident_id, out, idents);
+		print_ident(ident_id, out, strings);
 		fprintf(out, "'");
 		break;
 	}

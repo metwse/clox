@@ -9,8 +9,7 @@
 struct scanner {
 	const char *cur;
 
-	struct str_pool *idents;
-	struct str_pool *str_literals;
+	struct str_pool *strings;
 
 	int line;
 	int col;
@@ -23,9 +22,7 @@ void scanner_xstatic_init(void);
 void scanner_static_destroy(void);
 
 /* Initializes a new scanner. */
-void scanner_xinit(struct scanner *,
-		   struct str_pool *idents,
-		   struct str_pool *str_literals);
+void scanner_xinit(struct scanner *, struct str_pool *strings);
 
 /* Feed the scanner with a string input. */
 void scanner_feed(struct scanner *, const char *buf);

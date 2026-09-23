@@ -12,12 +12,9 @@
 #include <stdlib.h>
 
 
-void vm_xinit(struct vm *vm,
-	      struct str_pool *idents,
-	      struct str_pool *str_literals)
+void vm_xinit(struct vm *vm, struct str_pool *strings)
 {
-	vm->idents = idents;
-	vm->str_literals = str_literals;
+	vm->strings = strings;
 
 	fstack_call_frames_xinit(&vm->frames);
 	fstack_vals_xinit(&vm->stack);
@@ -207,6 +204,8 @@ static int vm_run(struct vm *vm)
 
 		switch (inst.op) {
 		case OP_RETURN: {
+			/* TODO: early returns from a scope raises inconsistent
+			 * stack error. */
 			if (fstack_call_frames_len(&vm->frames) == 0) {
 				print_val(vm, pop(vm));
 
@@ -217,6 +216,7 @@ static int vm_run(struct vm *vm)
 			} else {
 				struct val res = pop(vm);
 
+				/* TODO: multipop */
 				for (uint32_t arity = vm->current.arity;
 				     arity > 0;
 				     arity--) {
