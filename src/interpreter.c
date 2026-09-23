@@ -1,4 +1,5 @@
 #include "../include/common.h"
+#include "../include/globals.h"
 #include "../include/grammar.h"
 #include "../include/interpreter.h"
 #include "../include/scanner.h"
@@ -40,9 +41,11 @@ void interpreter_xinit(struct interpreter *i)
 
 	str_pool_xinit(&i->strings);
 
+	globals_xinit(&i->globals);
+
 	scanner_xinit(&i->scanner, &i->strings);
 
-	vm_xinit(&i->vm, &i->strings);
+	vm_xinit(&i->vm, &i->strings, &i->globals);
 
 	clox_assert(rdesc_start(&i->parser, NT_DECL) == 0,
 		    "cannot start rdesc");
@@ -53,6 +56,8 @@ void interpreter_destroy(struct interpreter *i)
 	vm_destroy(&i->vm);
 
 	str_pool_destroy(&i->strings);
+
+	globals_destroy(&i->globals);
 
 	rdesc_destroy(&i->parser);
 }
@@ -81,9 +86,10 @@ int interpreter_run(struct interpreter *i, const char *source)
 
 		case RDESC_READY: {
 			struct chunk chunk =
-				chunk_xcompile(rdesc_get_root(&i->parser));
+				chunk_xcompile(rdesc_get_root(&i->parser),
+					       &i->globals);
 
-			chunk_disassemble(&chunk, &i->strings, stderr, 0, 0);
+			chunk_disassemble(&chunk, stderr, 0, 0);
 
 			if (vm_execute(&i->vm, &chunk))
 				clox_report("execution interrupted due to a "

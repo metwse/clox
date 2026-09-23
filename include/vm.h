@@ -2,6 +2,7 @@
 #define VM_H
 
 #include "chunk.h"
+#include "globals.h"
 #include "object.h"
 #include "string_pool.h"
 
@@ -26,19 +27,21 @@ struct call_frame {
 /* The clox vm. */
 struct vm {
 	struct str_pool *strings;
+	struct globals *globals;
 
 	struct call_frame current;
 	struct fstack_call_frames frames;
 
 	struct fstack_vals stack;
 	/* struct fstack objects; */
-	struct fhmap_globals globals;
 	struct obj_upvalue *open_upvalues;
 };
 
 
 /* Initialize a new VM. */
-void vm_xinit(struct vm *, struct str_pool *strings);
+void vm_xinit(struct vm *,
+	      struct str_pool *strings,
+	      struct globals *globals);
 
 /* Free the resources owned by the VM. */
 void vm_destroy(struct vm *);

@@ -71,7 +71,7 @@ void obj_print(const struct obj *o, const struct vm *vm)
 {
 	switch (OBJ_TYPE(o)) {
 	case OBJ_FUNCTION:
-		printf("(fn %d)\n", AS_FUNCTION(o)->ident_id);
+		printf("(fn %d)\n", AS_FUNCTION(o)->name_str_id);
 		break;
 
 	case OBJ_CLOSURE:
@@ -108,8 +108,6 @@ bool obj_is_equal(const struct obj *a, const struct obj *b)
 
 	switch (OBJ_TYPE(a)) {
 	case OBJ_FUNCTION:
-		return AS_FUNCTION(a)->ident_id == AS_FUNCTION(b)->ident_id;
-
 	case OBJ_UPVALUE:
 	case OBJ_CLOSURE:
 		return a == b;
@@ -131,16 +129,16 @@ bool obj_is_equal(const struct obj *a, const struct obj *b)
 }
 
 struct obj_function *obj_function_new(struct chunk c,
-				      uint32_t ident_id,
 				      uint32_t arity,
-				      uint32_t upvalue_count)
+				      uint32_t upvalue_count,
+				      uint32_t name_str_id)
 {
 	struct obj_function *obj = malloc(sizeof(struct obj_function));
 	clox_assert(obj, "cannot malloc");
 
 	*obj = (struct obj_function) {
 		.obj = { .type = OBJ_FUNCTION },
-		.ident_id = ident_id,
+		.name_str_id = name_str_id,
 		.chunk = c,
 		.arity = arity,
 		.upvalue_count = upvalue_count

@@ -35,9 +35,9 @@ struct obj {
 
 struct obj_function {
 	struct obj obj;
-	uint32_t arity;
 	struct chunk chunk;
-	uint32_t ident_id;
+	uint32_t arity;
+	uint32_t name_str_id;
 	uint32_t upvalue_count;
 };
 
@@ -79,9 +79,9 @@ bool obj_is_equal(const struct obj *a, const struct obj *b);
 
 
 struct obj_function *obj_function_new(struct chunk,
-				      uint32_t ident_id,
 				      uint32_t arity,
-				      uint32_t upvalue_count);
+				      uint32_t upvalue_count,
+				      uint32_t name_str_id);
 
 struct obj_closure *obj_closure_new(const struct obj_function *);
 

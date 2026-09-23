@@ -1,6 +1,7 @@
 #ifndef INTERPRETER_H
 #define INTERPRETER_H
 
+#include "globals.h"
 #include "scanner.h"
 #include "string_pool.h"
 #include "vm.h"
@@ -11,6 +12,7 @@
 /* The clox interpreter. */
 struct interpreter {
 	struct str_pool strings;
+	struct globals globals;
 	struct scanner scanner;
 	struct rdesc parser;
 	struct vm vm;

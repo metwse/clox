@@ -13,6 +13,7 @@ void chunk_xinit(struct chunk *c)
 {
 	fstack_chunk_xinit(&c->chunk);
 	fstack_chunk_line_xinit(&c->chunk_line);
+	fstack_chunk_referenced_global_ids_xinit(&c->referenced_global_ids);
 	fstack_vals_xinit(&c->constants);
 }
 
@@ -20,6 +21,7 @@ void chunk_compact(struct chunk *c)
 {
 	fstack_chunk_shrink_to_fit(&c->chunk);
 	fstack_chunk_line_shrink_to_fit(&c->chunk_line);
+	fstack_chunk_referenced_global_ids_shrink_to_fit(&c->referenced_global_ids);
 	fstack_vals_shrink_to_fit(&c->constants);
 }
 
@@ -38,6 +40,7 @@ void chunk_destroy(struct chunk *c)
 	}
 	*/
 
+	fstack_chunk_referenced_global_ids_destroy(&c->referenced_global_ids);
 	fstack_vals_destroy(&c->constants);
 }
 
@@ -102,7 +105,6 @@ size_t chunk_len(const struct chunk *c)
 }
 
 void chunk_disassemble(const struct chunk *c,
-		       const struct str_pool *strings,
 		       FILE *out,
 		       size_t offset,
 		       size_t len)
@@ -130,7 +132,7 @@ void chunk_disassemble(const struct chunk *c,
 		fprintf(out, "%04zu ", offset + i);
 		i += inst_len(inst);
 
-		inst_print(inst, out, prev_line == line ? -1 : line, strings);
+		inst_print(inst, out, prev_line == line ? -1 : line);
 
 		prev_line = line;
 	}

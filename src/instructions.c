@@ -1,6 +1,5 @@
 #include "../include/common.h"
 #include "../include/instructions.h"
-#include "../include/string_pool.h"
 
 #include <inttypes.h>
 #include <stddef.h>
@@ -65,26 +64,7 @@ size_t inst_len(struct inst inst)
 }
 
 
-static void print_ident(uint32_t ident_id,
-			FILE *out,
-			const struct str_pool *strings)
-{
-	const char *out_chars;
-	size_t out_len;
-
-	clox_assert(str_pool_get_chars(strings,
-				       ident_id,
-				       &out_chars,
-				       &out_len),
-		    "ident not found, possibly GC'ed!");
-
-	fprintf(out, "%.*s", (int) out_len, out_chars);
-}
-
-void inst_print(struct inst inst,
-		FILE *out,
-		int line,
-		const struct str_pool *strings)
+void inst_print(struct inst inst, FILE *out, int line)
 {
 	bool first = true;
 #define LINE do { \
@@ -120,8 +100,6 @@ void inst_print(struct inst inst,
 	case OP_CALL:
 	case OP_GET_LOCAL:
 	case OP_SET_LOCAL:
-		fprintf(out, "%"PRIu32, inst_get_u8_or_u24_arg(inst, 0));
-		break;
 
 	case OP_DEFINE_GLOBAL_LONG:
 	case OP_GET_GLOBAL_LONG:
@@ -130,10 +108,7 @@ void inst_print(struct inst inst,
 	case OP_DEFINE_GLOBAL:
 	case OP_GET_GLOBAL:
 	case OP_SET_GLOBAL: {
-		uint32_t ident_id = inst_get_u8_or_u24_arg(inst, 0);
-		fprintf(out, "%"PRIu32" '", ident_id);
-		print_ident(ident_id, out, strings);
-		fprintf(out, "'");
+		fprintf(out, "%"PRIu32, inst_get_u8_or_u24_arg(inst, 0));
 		break;
 	}
 

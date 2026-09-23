@@ -65,9 +65,8 @@ enum nt_id {
 };
 
 union seminfo_data {
-	uint32_t ident_id;
-	uint32_t str_literal_id;
-	double num;
+	uint32_t str_id  /* TK_STR or TK_IDENT */;
+	double num  /* TK_NUM */;
 };
 
 struct seminfo {

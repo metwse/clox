@@ -1,8 +1,8 @@
 #ifndef CHUNK_H
 #define CHUNK_H
 
-#include "value.h"
 #include "instructions.h"
+#include "value.h"
 
 #include "../vendor/rdesc/include/rdesc.h"
 
@@ -10,6 +10,7 @@
 #include <stdint.h>
 #include <stdio.h>
 
+struct globals;  /* defined in globals.h */
 struct str_pool;  /* defined in string_pool.h */
 
 
@@ -24,6 +25,9 @@ struct chunk_line {
 #define T uint8_t, chunk
 #include "../vendor/libfun/include/stack.h"
 
+#define T uint32_t, chunk_referenced_global_ids
+#include "../vendor/libfun/include/stack.h"
+
 
 /* Compiled chunk. */
 struct chunk {
@@ -31,12 +35,15 @@ struct chunk {
 	struct fstack_chunk chunk;
 	struct fstack_chunk_line chunk_line;
 
+	/* globals referenced by the chunk */
+	struct fstack_chunk_referenced_global_ids referenced_global_ids;
+
 	struct fstack_vals constants;
 };
 
 
 /* Compile a parse tree. */
-struct chunk chunk_xcompile(struct rdesc_node);
+struct chunk chunk_xcompile(struct rdesc_node, struct globals *);
 
 /* Free the resources owned by the chunk. */
 void chunk_destroy(struct chunk *);
@@ -44,7 +51,6 @@ void chunk_destroy(struct chunk *);
 /* Print out disassembled instructions.
  * Use zero `len` for no limit. */
 void chunk_disassemble(const struct chunk *,
-		       const struct str_pool *strings,
 		       FILE *out,
 		       size_t offset,
 		       size_t len);

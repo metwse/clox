@@ -12,14 +12,16 @@
 #include <stdlib.h>
 
 
-void vm_xinit(struct vm *vm, struct str_pool *strings)
+void vm_xinit(struct vm *vm,
+	      struct str_pool *strings,
+	      struct globals *globals)
 {
 	vm->strings = strings;
+	vm->globals = globals;
 
 	fstack_call_frames_xinit(&vm->frames);
 	fstack_vals_xinit(&vm->stack);
 	/* fstack_xinit(&vm->objects, sizeof(struct obj *)); */
-	fhmap_globals_xinit(&vm->globals);
 	vm->open_upvalues = NULL;
 }
 
@@ -33,8 +35,6 @@ void vm_destroy(struct vm *vm)
 		obj_free(*(struct obj **) fstack_at(&vm->objects, i));
 	fstack_destroy(&vm->objects);
 	*/
-
-	fhmap_globals_destroy(&vm->globals);
 }
 
 /*
@@ -249,10 +249,10 @@ static int vm_run(struct vm *vm)
 
 		case OP_CONSTANT:
 		case OP_CONSTANT_LONG: {
-			size_t constant_idx = inst_get_u8_or_u24_arg(inst, 0);
+			size_t constant_id = inst_get_u8_or_u24_arg(inst, 0);
 
 			struct val v =
-				*fstack_vals_at(&c->constants, constant_idx);
+				*fstack_vals_at(&c->constants, constant_id);
 
 			if (IS_OBJ(v)) {
 				struct obj *new_obj = obj_clone(AS_OBJ(v));
@@ -272,10 +272,9 @@ static int vm_run(struct vm *vm)
 		case OP_GET_GLOBAL_LONG:
 		case OP_SET_GLOBAL:
 		case OP_SET_GLOBAL_LONG: {
-			uint32_t ident_id = inst_get_u8_or_u24_arg(inst, 0);
-
+			uint32_t global_id = inst_get_u8_or_u24_arg(inst, 0);
 			struct val *current =
-				fhmap_globals_get2_mut(&vm->globals, &ident_id);
+				globals_get(vm->globals, global_id);
 
 			switch (inst.op) {
 			case OP_DEFINE_GLOBAL:
@@ -283,11 +282,7 @@ static int vm_run(struct vm *vm)
 				if (current != NULL)
 					runtime_error("variable is already defined");
 
-				struct val v = pop(vm);
-				fhmap_globals_xinsert2(&vm->globals,
-						       &ident_id,
-						       &v);
-
+				globals_define(vm->globals, global_id, pop(vm));
 				break;
 
 			case OP_GET_GLOBAL:
@@ -364,7 +359,6 @@ static int vm_run(struct vm *vm)
 
 			struct obj_upvalue *upval =
 				vm->current.closure->upvalues[slot];
-
 			struct val *v;
 
 			if (upval->is_local)
@@ -383,10 +377,10 @@ static int vm_run(struct vm *vm)
 
 		case OP_CLOSURE:
 		case OP_CLOSURE_LONG: {
-			size_t constant_idx = inst_get_u8_or_u24_arg(inst, 0);
+			size_t constant_id = inst_get_u8_or_u24_arg(inst, 0);
 
 			struct val v = *fstack_vals_at(&c->constants,
-						       constant_idx);
+						       constant_id);
 
 			clox_assert(IS_OBJ(v) && IS_OBJ_TYPE(AS_OBJ(v), OBJ_FUNCTION),
 				    "can only create closures from functions");

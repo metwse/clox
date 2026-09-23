@@ -21,9 +21,7 @@
 
 #define SEMINFO_NUM(n) (SEMINFO(n).num)
 
-#define SEMINFO_STR_LITERAL_ID(n) (SEMINFO(n).str_literal_id)
-
-#define SEMINFO_IDENT_ID(n) (SEMINFO(n).ident_id)
+#define SEMINFO_STR_ID(n) (SEMINFO(n).str_id)
 
 
 static void compile_expression(struct chunk *, struct rdesc_node, struct compiler *, bool);
@@ -251,7 +249,7 @@ static void compile_expression(struct chunk *c,
 		case 1: {
 			struct obj_str_literal *obj =
 				obj_str_literal_new(
-					SEMINFO_STR_LITERAL_ID(rchild(n, 0)));
+					SEMINFO_STR_ID(rchild(n, 0)));
 
 			emit_const(OBJ_VAL((struct obj *) obj));
 			break;
@@ -282,12 +280,12 @@ static void compile_expression(struct chunk *c,
 			break;
 
 		case 8: {
-			uint32_t ident_id = SEMINFO_IDENT_ID(rchild(n, 0));
+			uint32_t str_id = SEMINFO_STR_ID(rchild(n, 0));
 
 			if (is_lvalue)
-				emit_inst_set(ident_id);
+				emit_inst_set(str_id);
 			else
-				emit_inst_get(ident_id);
+				emit_inst_get(str_id);
 			break;
 		}
 		}
@@ -324,8 +322,8 @@ static void compile_var_decl(struct chunk *c,
 		emit_inst(OP_NIL);
 	}
 
-	uint32_t ident_id = SEMINFO_IDENT_ID(rchild(n, 1));
-	compiler_emit_define_variable_inst(current, c, ident_id);
+	uint32_t str_id = SEMINFO_STR_ID(rchild(n, 1));
+	compiler_emit_define_variable_inst(current, c, str_id);
 }
 
 static void compile_block(struct chunk *c,
@@ -529,7 +527,7 @@ static void compile_function_decl(struct chunk *c,
 	size_t arity = 0;
 
 	struct compiler enclosed;
-	compiler_xinit(&enclosed, current);
+	compiler_xinit(&enclosed, current, current->globals);
 
 	struct chunk new_chunk;
 	chunk_xinit(&new_chunk);
@@ -549,10 +547,10 @@ static void compile_function_decl(struct chunk *c,
 		while (true) {
 			bool last = ralt_idx(params) == 1;
 
-			uint32_t ident_id =
-				SEMINFO_IDENT_ID(rchild(params, last ? 0 : 2));
+			uint32_t str_id =
+				SEMINFO_STR_ID(rchild(params, last ? 0 : 2));
 
-			compiler_define_local(&enclosed, ident_id);
+			compiler_define_local(&enclosed, str_id);
 			arity++;
 
 			if (last)
@@ -570,19 +568,21 @@ static void compile_function_decl(struct chunk *c,
 	c = hold_c;
 	current = hold_compiler;
 
-	uint32_t ident_id = SEMINFO_IDENT_ID(rchild(n, 1));
+	uint32_t function_name_str_id = SEMINFO_STR_ID(rchild(n, 1));
+	/* TODO: resolve global_id by str_id */
+	uint32_t global_id = function_name_str_id;
 
 	chunk_compact(&new_chunk);
 	struct obj_function *fun = obj_function_new(new_chunk,
-						    ident_id,
 						    arity,
-						    fstack_upvalues_len(&enclosed.upvalues));
+						    fstack_upvalues_len(&enclosed.upvalues),
+						    function_name_str_id);
 
 	struct val v = OBJ_VAL((struct obj *) fun);
 	uint32_t constant_id = chunk_xpush_constant(c, &v);
 
 	compiler_emit_closure_inst(current, &enclosed, c, constant_id);
-	compiler_emit_define_variable_inst(current, c, ident_id);
+	compiler_emit_define_variable_inst(current, c, global_id);
 
 	compiler_destroy(&enclosed);
 }
@@ -625,13 +625,13 @@ static void compile_decl(struct chunk *c,
 }
 
 /* shall procide NT_DECL */
-struct chunk chunk_xcompile(struct rdesc_node n)
+struct chunk chunk_xcompile(struct rdesc_node n, struct globals *g)
 {
 	struct chunk c;
 	struct compiler current;
 
 	chunk_xinit(&c);
-	compiler_xinit(&current, NULL);
+	compiler_xinit(&current, NULL, g);
 
 	compile_decl(&c, n, &current);
 	chunk_xwrite_inst(&c, current.line, (struct inst) { .op = OP_NIL });
