@@ -126,10 +126,6 @@ static void recover_runtime_error(struct vm *vm);
 		xpush(vm, &val_type(a op b)); \
 	} while (0)
 
-#define get_u8_or_u24_arg(inst, offset) \
-	(inst_arg_len(inst.op) == 3 ? \
-	 	inst_get_u24_arg(inst, offset) : inst_get_u8_arg(inst, offset))
-
 #define read_and_increment_pc do { \
 		inst = chunk_read_inst(vm->current.c, vm->current.pc); \
 		vm->current.pc += inst_len(inst); \
@@ -253,7 +249,7 @@ static int vm_run(struct vm *vm)
 
 		case OP_CONSTANT:
 		case OP_CONSTANT_LONG: {
-			size_t constant_idx = get_u8_or_u24_arg(inst, 0);
+			size_t constant_idx = inst_get_u8_or_u24_arg(inst, 0);
 
 			struct val v =
 				*fstack_vals_at(&c->constants, constant_idx);
@@ -276,7 +272,7 @@ static int vm_run(struct vm *vm)
 		case OP_GET_GLOBAL_LONG:
 		case OP_SET_GLOBAL:
 		case OP_SET_GLOBAL_LONG: {
-			uint32_t ident_id = get_u8_or_u24_arg(inst, 0);
+			uint32_t ident_id = inst_get_u8_or_u24_arg(inst, 0);
 
 			struct val *current =
 				fhmap_globals_get2_mut(&vm->globals, &ident_id);
@@ -320,7 +316,7 @@ static int vm_run(struct vm *vm)
 		case OP_GET_LOCAL_LONG:
 		case OP_SET_LOCAL:
 		case OP_SET_LOCAL_LONG: {
-			size_t slot = get_u8_or_u24_arg(inst, 0);
+			size_t slot = inst_get_u8_or_u24_arg(inst, 0);
 			struct val *v = fstack_vals_at_mut(&vm->stack,
 							   vm->current.fp + slot);
 
@@ -364,7 +360,7 @@ static int vm_run(struct vm *vm)
 		case OP_GET_UPVALUE_LONG:
 		case OP_SET_UPVALUE:
 		case OP_SET_UPVALUE_LONG: {
-			size_t slot = get_u8_or_u24_arg(inst, 0);
+			size_t slot = inst_get_u8_or_u24_arg(inst, 0);
 
 			struct obj_upvalue *upval =
 				vm->current.closure->upvalues[slot];
@@ -387,7 +383,7 @@ static int vm_run(struct vm *vm)
 
 		case OP_CLOSURE:
 		case OP_CLOSURE_LONG: {
-			size_t constant_idx = get_u8_or_u24_arg(inst, 0);
+			size_t constant_idx = inst_get_u8_or_u24_arg(inst, 0);
 
 			struct val v = *fstack_vals_at(&c->constants,
 						       constant_idx);

@@ -10,6 +10,8 @@
 #include <stdint.h>
 #include <stdio.h>
 
+struct str_pool;  /* defined in string_pool.h */
+
 
 struct chunk_line {
 	int line;
@@ -41,7 +43,11 @@ void chunk_destroy(struct chunk *);
 
 /* Print out disassembled instructions.
  * Use zero `len` for no limit. */
-void chunk_disassemble(struct chunk *, FILE *out, size_t offset, size_t len);
+void chunk_disassemble(const struct chunk *,
+		       const struct str_pool *idents,
+		       FILE *out,
+		       size_t offset,
+		       size_t len);
 
 /* Push a new instruction. */
 void chunk_xwrite_inst(struct chunk *, int line, struct inst);

@@ -6,6 +6,14 @@
 #include <stdio.h>
 #include <stdbool.h>
 
+struct str_pool;  /* defined in string_pool.h */
+
+
+#define inst_get_u8_or_u24_arg(inst, offset) \
+	(inst_arg_len(inst.op) == 3 ? \
+	 	inst_get_u24_arg(inst, offset) : inst_get_u8_arg(inst, offset))
+
+
 #define LAST_OPCODE OP_NOT
 
 union op_closure_arg {
@@ -115,7 +123,7 @@ size_t inst_arg_len(enum opcode op);
 size_t inst_len(struct inst);
 
 /* Debug printing an instruction. */
-void inst_print(struct inst, FILE *out, int line);
+void inst_print(struct inst, FILE *out, int line, const struct str_pool *idents);
 
 /* Get one byte argument. */
 uint8_t inst_get_u8_arg(struct inst, size_t offset);

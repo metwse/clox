@@ -1,4 +1,6 @@
+#include "../include/common.h"
 #include "../include/instructions.h"
+#include "../include/string_pool.h"
 
 #include <inttypes.h>
 #include <stddef.h>
@@ -62,7 +64,27 @@ size_t inst_len(struct inst inst)
 	return len;
 }
 
-void inst_print(struct inst inst, FILE *out, int line)
+
+static void print_ident(uint32_t ident_id,
+			FILE *out,
+			const struct str_pool *idents)
+{
+	const char *out_chars;
+	size_t out_len;
+
+	clox_assert(str_pool_get_chars(idents,
+				       ident_id,
+				       &out_chars,
+				       &out_len),
+		    "ident not found, possibly GC'ed!");
+
+	fprintf(out, "%.*s", (int) out_len, out_chars);
+}
+
+void inst_print(struct inst inst,
+		FILE *out,
+		int line,
+		const struct str_pool *idents)
 {
 	bool first = true;
 #define LINE do { \
@@ -84,32 +106,36 @@ void inst_print(struct inst inst, FILE *out, int line)
 
 	switch (inst.op) {
 	case OP_CONSTANT_LONG:
-	case OP_DEFINE_GLOBAL_LONG:
-	case OP_GET_GLOBAL_LONG:
-	case OP_SET_GLOBAL_LONG:
-	case OP_GET_LOCAL_LONG:
-	case OP_SET_LOCAL_LONG:
-	case OP_GET_UPVALUE_LONG:
-	case OP_SET_UPVALUE_LONG:
 	case OP_JUMP:
 	case OP_JUMP_IF_FALSE:
 	case OP_JUMP_BACK:
 	case OP_CLOSURE_LONG:
-		fprintf(out, "%"PRIu32, inst_get_u24_arg(inst, 0));
-		break;
+	case OP_GET_LOCAL_LONG:
+	case OP_SET_LOCAL_LONG:
 
 	case OP_CONSTANT:
-	case OP_DEFINE_GLOBAL:
-	case OP_GET_GLOBAL:
-	case OP_SET_GLOBAL:
-	case OP_GET_LOCAL:
-	case OP_SET_LOCAL:
 	case OP_GET_UPVALUE:
 	case OP_SET_UPVALUE:
 	case OP_CLOSURE:
 	case OP_CALL:
-		fprintf(out, "%"PRIu8, inst_get_u8_arg(inst, 0));
+	case OP_GET_LOCAL:
+	case OP_SET_LOCAL:
+		fprintf(out, "%"PRIu32, inst_get_u8_or_u24_arg(inst, 0));
 		break;
+
+	case OP_DEFINE_GLOBAL_LONG:
+	case OP_GET_GLOBAL_LONG:
+	case OP_SET_GLOBAL_LONG:
+
+	case OP_DEFINE_GLOBAL:
+	case OP_GET_GLOBAL:
+	case OP_SET_GLOBAL: {
+		uint32_t ident_id = inst_get_u8_or_u24_arg(inst, 0);
+		fprintf(out, "%"PRIu32" '", ident_id);
+		print_ident(ident_id, out, idents);
+		fprintf(out, "'");
+		break;
+	}
 
 	default:
 		break;
@@ -122,7 +148,7 @@ void inst_print(struct inst inst, FILE *out, int line)
 		uint32_t out_index;
 		bool out_is_local;
 
-		fprintf(out, " <upvals>");
+		fprintf(out, " <fn>");
 		while ((arg_len = inst_get_next_closure_arg(inst,
 							    offset,
 							    &out_index,

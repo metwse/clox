@@ -570,9 +570,6 @@ static void compile_function_decl(struct chunk *c,
 	c = hold_c;
 	current = hold_compiler;
 
-	chunk_disassemble(&new_chunk, stdout, 0, 0);
-	printf("\n\n");
-
 	uint32_t ident_id = SEMINFO_IDENT_ID(rchild(n, 1));
 
 	chunk_compact(&new_chunk);

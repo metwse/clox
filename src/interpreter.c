@@ -85,7 +85,7 @@ int interpreter_run(struct interpreter *i, const char *source)
 			struct chunk chunk =
 				chunk_xcompile(rdesc_get_root(&i->parser));
 
-			chunk_disassemble(&chunk, stderr, 0, 0);
+			chunk_disassemble(&chunk, &i->idents, stderr, 0, 0);
 
 			if (vm_execute(&i->vm, &chunk))
 				clox_report("execution interrupted due to a "

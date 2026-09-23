@@ -102,7 +102,11 @@ size_t chunk_len(const struct chunk *c)
 }
 
 
-void chunk_disassemble(struct chunk *c, FILE *out, size_t offset, size_t len)
+void chunk_disassemble(const struct chunk *c,
+		       const struct str_pool *idents,
+		       FILE *out,
+		       size_t offset,
+		       size_t len)
 {
 	if (fstack_chunk_len(&c->chunk) == 0)
 		return;
@@ -116,9 +120,8 @@ void chunk_disassemble(struct chunk *c, FILE *out, size_t offset, size_t len)
 	for (size_t i = 0;
 	     (len == 0 || i < len) && offset + i < fstack_chunk_len(&c->chunk);) {
 		for (; total_instructions <= offset + i; cli_index++) {
-			struct chunk_line *cli =
-				fstack_chunk_line_at_mut(&c->chunk_line,
-							 cli_index);
+			const struct chunk_line *cli =
+				fstack_chunk_line_at(&c->chunk_line, cli_index);
 
 			total_instructions += cli->count;
 			line = cli->line;
@@ -128,7 +131,7 @@ void chunk_disassemble(struct chunk *c, FILE *out, size_t offset, size_t len)
 		fprintf(out, "%04zu ", offset + i);
 		i += inst_len(inst);
 
-		inst_print(inst, out, prev_line == line ? -1 : line);
+		inst_print(inst, out, prev_line == line ? -1 : line, idents);
 
 		prev_line = line;
 	}

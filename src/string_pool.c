@@ -36,7 +36,7 @@ uint32_t str_pool_xget_id(struct str_pool *p, const char *chars, size_t len)
 	}
 }
 
-bool str_pool_get_chars(struct str_pool *p,
+bool str_pool_get_chars(const struct str_pool *p,
 			uint32_t str_id,
 			const char **out_chars,
 			size_t *out_len)
