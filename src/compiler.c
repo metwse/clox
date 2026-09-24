@@ -248,8 +248,8 @@ static void compile_expression(struct chunk *c,
 
 		case 1: {
 			struct obj_str_literal *obj =
-				obj_str_literal_new(
-					SEMINFO_STR_ID(rchild(n, 0)));
+				obj_str_literal_new(current->vm,
+						    SEMINFO_STR_ID(rchild(n, 0)));
 
 			emit_const(OBJ_VAL((struct obj *) obj));
 			break;
@@ -527,7 +527,7 @@ static void compile_function_decl(struct chunk *c,
 	size_t arity = 0;
 
 	struct compiler enclosed;
-	compiler_xinit(&enclosed, current, current->globals);
+	compiler_xinit(&enclosed, current, current->vm);
 
 	struct chunk new_chunk;
 	chunk_xinit(&new_chunk);
@@ -569,7 +569,8 @@ static void compile_function_decl(struct chunk *c,
 	current = hold_compiler;
 
 	chunk_compact(&new_chunk);
-	struct obj_function *fun = obj_function_new(new_chunk,
+	struct obj_function *fun = obj_function_new(current->vm,
+						    new_chunk,
 						    arity,
 						    fstack_upvalues_len(&enclosed.upvalues));
 
@@ -622,13 +623,13 @@ static void compile_decl(struct chunk *c,
 }
 
 /* shall procide NT_DECL */
-struct chunk chunk_xcompile(struct rdesc_node n, struct globals *g)
+struct chunk chunk_xcompile(struct vm *vm, struct rdesc_node n)
 {
 	struct chunk c;
 	struct compiler current;
 
 	chunk_xinit(&c);
-	compiler_xinit(&current, NULL, g);
+	compiler_xinit(&current, NULL, vm);
 
 	compile_decl(&c, n, &current);
 	chunk_xwrite_inst(&c, current.line, (struct inst) { .op = OP_NIL });

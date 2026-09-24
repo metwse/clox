@@ -10,8 +10,7 @@
 #include <stdint.h>
 #include <stdio.h>
 
-struct globals;  /* defined in globals.h */
-struct str_pool;  /* defined in string_pool.h */
+struct vm;  /* defined in vm.h */
 
 
 struct chunk_line {
@@ -43,7 +42,7 @@ struct chunk {
 
 
 /* Compile a parse tree. */
-struct chunk chunk_xcompile(struct rdesc_node, struct globals *);
+struct chunk chunk_xcompile(struct vm *, struct rdesc_node);
 
 /* Free the resources owned by the chunk. */
 void chunk_destroy(struct chunk *);

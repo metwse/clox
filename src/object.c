@@ -1,6 +1,7 @@
 #include "../include/chunk.h"
 #include "../include/common.h"
 #include "../include/object.h"
+#include "../include/string_pool.h"
 #include "../include/vm.h"
 
 #include <stdbool.h>
@@ -34,7 +35,7 @@ void obj_free(struct obj *o)
 	free(o);
 }
 
-struct obj *obj_clone(const struct obj *o)
+struct obj *obj_clone(struct vm *vm, const struct obj *o)
 {
 	switch (OBJ_TYPE(o)) {
 	case OBJ_FUNCTION:
@@ -54,7 +55,7 @@ struct obj *obj_clone(const struct obj *o)
 		break;
 
 	case OBJ_STR_LITERAL:
-		return (struct obj *) obj_str_literal_new(AS_STR_LITERAL(o)->id);
+		return (struct obj *) obj_str_literal_new(vm, AS_STR_LITERAL(o)->id);
 	}
 
 	return NULL;  // unreachable
@@ -113,12 +114,18 @@ bool obj_is_equal(const struct obj *a, const struct obj *b)
 	return false;  // unreachable
 }
 
-struct obj_function *obj_function_new(struct chunk c,
+#define obj_new(type) \
+	struct obj_ ## type *obj = \
+		(struct obj_ ##type *) vm_obj_alloc(vm, \
+						    sizeof(struct obj_ ## type)); \
+	obj->obj.is_marked = false
+
+struct obj_function *obj_function_new(struct vm *vm,
+				      struct chunk c,
 				      uint32_t arity,
 				      uint32_t upvalue_count)
 {
-	struct obj_function *obj = malloc(sizeof(struct obj_function));
-	clox_assert(obj, "cannot malloc");
+	obj_new(function);
 
 	*obj = (struct obj_function) {
 		.obj = { .type = OBJ_FUNCTION },
@@ -130,10 +137,10 @@ struct obj_function *obj_function_new(struct chunk c,
 	return obj;
 }
 
-struct obj_closure *obj_closure_new(const struct obj_function *function)
+struct obj_closure *obj_closure_new(struct vm *vm,
+				    const struct obj_function *function)
 {
-	struct obj_closure *obj = malloc(sizeof(struct obj_closure));
-	clox_assert(obj, "cannot malloc");
+	obj_new(closure);
 
 	struct obj_upvalue **upvalues;
 	if (function->upvalue_count)
@@ -153,10 +160,9 @@ struct obj_closure *obj_closure_new(const struct obj_function *function)
 	return obj;
 }
 
-struct obj_upvalue *obj_upvalue_new(size_t location)
+struct obj_upvalue *obj_upvalue_new(struct vm *vm, size_t location)
 {
-	struct obj_upvalue *obj = malloc(sizeof(struct obj_upvalue));
-	clox_assert(obj, "cannot malloc");
+	obj_new(upvalue);
 
 	*obj = (struct obj_upvalue) {
 		.obj = { .type = OBJ_UPVALUE },
@@ -168,10 +174,10 @@ struct obj_upvalue *obj_upvalue_new(size_t location)
 	return obj;
 }
 
-struct obj_native_function *obj_native_function_new(native_function_t *native_function)
+struct obj_native_function *obj_native_function_new(struct vm *vm,
+						    native_function_t *native_function)
 {
-	struct obj_native_function *obj = malloc(sizeof(struct obj_native_function));
-	clox_assert(obj, "cannot malloc");
+	obj_new(native_function);
 
 	*obj = (struct obj_native_function) {
 		.obj = { .type = OBJ_NATIVE_FUNCTION },
@@ -181,10 +187,9 @@ struct obj_native_function *obj_native_function_new(native_function_t *native_fu
 	return obj;
 }
 
-struct obj_str_literal *obj_str_literal_new(uint32_t id)
+struct obj_str_literal *obj_str_literal_new(struct vm *vm, uint32_t id)
 {
-	struct obj_str_literal *obj = malloc(sizeof(struct obj_str_literal));
-	clox_assert(obj, "cannot malloc");
+	obj_new(str_literal);
 
 	*obj = (struct obj_str_literal) {
 		.obj = { .type = OBJ_STR_LITERAL },

@@ -1,6 +1,8 @@
 #include "../include/chunk.h"
 #include "../include/common.h"
 #include "../include/instructions.h"
+#include "../include/globals.h"
+#include "../include/object.h"
 #include "../include/value.h"
 #include "../include/vm.h"
 
@@ -21,40 +23,50 @@ void vm_xinit(struct vm *vm,
 	vm->globals = globals;
 
 	fstack_call_frames_xinit(&vm->frames);
+	fstack_objects_xinit(&vm->objects);
 	fstack_vals_xinit(&vm->stack);
-	/* fstack_xinit(&vm->objects, sizeof(struct obj *)); */
 	vm->open_upvalues = NULL;
 }
 
 void vm_destroy(struct vm *vm)
 {
 	fstack_call_frames_destroy(&vm->frames);
+
+	for (size_t i = 0; i < fstack_objects_len(&vm->objects); i++)
+		obj_free(*fstack_objects_at_mut(&vm->objects, i));
+	fstack_objects_destroy(&vm->objects);
+
 	fstack_vals_destroy(&vm->stack);
-
-	/*
-	for (size_t i = 0; i < fstack_len(&vm->objects); i++)
-		obj_free(*(struct obj **) fstack_at(&vm->objects, i));
-	fstack_destroy(&vm->objects);
-	*/
 }
 
-/*
-void vm_obj_track(struct vm *vm, struct obj *o)
+struct obj *vm_obj_alloc(struct vm *vm, size_t size)
 {
-	fstack_xpush(&vm->objects, &o);
+	struct obj *o = malloc(size);
+	clox_assert(o != NULL, "memory allocation error");
+
+	fstack_objects_xpush(&vm->objects, &o);
+
+	return o;
 }
-*/
 
 static void xpush(struct vm *vm, struct val *v) {
 	fstack_vals_xpush(&vm->stack, v);
 }
 
-static struct val pop(struct vm *vm) {
-	return *fstack_vals_pop(&vm->stack);
+static void pop(struct vm *vm) {
+	fstack_vals_pop(&vm->stack);
+}
+
+static void multipop(struct vm *vm, size_t count) {
+	fstack_vals_multipop(&vm->stack, count);
 }
 
 static struct val peek(struct vm *vm, size_t distance) {
 	return *fstack_vals_peek(&vm->stack, distance);
+}
+
+static struct val *peek_ref(struct vm *vm, size_t distance) {
+	return fstack_vals_peek_mut(&vm->stack, distance);
 }
 
 static bool values_equal(struct val a, struct val b)
@@ -122,8 +134,9 @@ static void recover_runtime_error(struct vm *vm);
 		if (!IS_NUM(peek(vm, 0)) || !IS_NUM(peek(vm, 1))) { \
 			runtime_error("operands must be numbers"); \
 		} \
-		double b = AS_NUM(pop(vm)); \
-		double a = AS_NUM(pop(vm)); \
+		double b = AS_NUM(peek(vm, 0)); \
+		double a = AS_NUM(peek(vm, 1)); \
+		multipop(vm, 2); \
 		xpush(vm, &val_type(a op b)); \
 	} while (0)
 
@@ -163,8 +176,7 @@ static int call(struct vm *vm, struct obj *callable, uint32_t arg_count)
 
 		struct val res;
 		if (arg_count > 0) {
-			const struct val *popped_args = fstack_vals_multipop(&vm->stack,
-					arg_count);
+			const struct val *popped_args = peek_ref(vm, arg_count);
 
 			struct val args[arg_count];
 			memcpy(args, popped_args, sizeof(struct val) * arg_count);
@@ -174,7 +186,7 @@ static int call(struct vm *vm, struct obj *callable, uint32_t arg_count)
 			res = native_function->function(vm, NULL, 0);
 		}
 
-		pop(vm);  /* pop the callable */
+		multipop(vm, arg_count + 1 /* pop the callable */);
 		xpush(vm, &res);
 
 		break;
@@ -188,9 +200,7 @@ static int call(struct vm *vm, struct obj *callable, uint32_t arg_count)
 
 static void recover_runtime_error(struct vm *vm)
 {
-	fstack_vals_destroy(&vm->stack);
-	fstack_vals_xinit(&vm->stack);
-	/* TODO: continue from the previous function frame */
+	fstack_vals_clear(&vm->stack);
 }
 
 static struct obj_upvalue *capture_upvalue(struct vm *vm, size_t local)
@@ -206,7 +216,7 @@ static struct obj_upvalue *capture_upvalue(struct vm *vm, size_t local)
 	if (upval != NULL && upval->location.local == local)
 		return upval;
 
-	struct obj_upvalue *new_upval = obj_upvalue_new(local);
+	struct obj_upvalue *new_upval = obj_upvalue_new(vm, local);
 	new_upval->next = upval;
 
 	if (prev == NULL)
@@ -240,37 +250,34 @@ static int vm_run(struct vm *vm)
 
 		switch (inst.op) {
 		case OP_RETURN: {
-			/* TODO: early returns from a scope raises inconsistent
-			 * stack error. */
 			if (fstack_call_frames_len(&vm->frames) == 0) {
-				print_val(vm, pop(vm));
-
-				clox_assert(fstack_vals_len(&vm->stack) == 0,
-					    "inconsistent stack");
+				print_val(vm, peek(vm, 0));
+				fstack_vals_clear(&vm->stack);
 
 				return 0;
 			} else {
-				struct val res = pop(vm);
+				/* <call-obj> <scope-leftover...> <args...> <result>*/
+				struct call_frame frame =
+					*fstack_call_frames_top(&vm->frames);
 
-				/* TODO: multipop */
-				for (uint32_t arity = vm->current.arity;
-				     arity > 0;
-				     arity--) {
-					pop(vm);
-				}
+				*fstack_vals_at_mut(&vm->stack,
+						    vm->current.fp - 1) = peek(vm, 0);
+				/* overwrite function address with the result*/
+				multipop(vm, fstack_vals_len(&vm->stack) - vm->current.fp);
 
-				pop(vm);  /* the callable */
+				clox_assert(fstack_vals_len(&vm->stack) == vm->current.fp,
+					    "inconsistent stack");
+				vm->current = frame;
+				fstack_call_frames_pop(&vm->frames);
 
-				xpush(vm, &res);
 
-				vm->current =
-					*fstack_call_frames_pop(&vm->frames);
 			}
 			break;
 		}
 
 		case OP_PRINT:
-			print_val(vm, pop(vm));
+			print_val(vm, peek(vm, 0));
+			pop(vm);
 			break;
 
 		case OP_POP:
@@ -291,7 +298,7 @@ static int vm_run(struct vm *vm)
 				*fstack_vals_at(&c->constants, constant_id);
 
 			if (IS_OBJ(v)) {
-				struct obj *new_obj = obj_clone(AS_OBJ(v));
+				struct obj *new_obj = obj_clone(vm, AS_OBJ(v));
 				/* vm_obj_track(vm, new_obj); */
 
 				xpush(vm, &OBJ_VAL(new_obj));
@@ -318,7 +325,8 @@ static int vm_run(struct vm *vm)
 				if (current != NULL)
 					runtime_error("variable is already defined");
 
-				globals_define(vm->globals, global_id, pop(vm));
+				globals_define(vm->globals, global_id, peek(vm, 0));
+				pop(vm);
 				break;
 
 			case OP_GET_GLOBAL:
@@ -420,7 +428,7 @@ static int vm_run(struct vm *vm)
 				    "can only create closures from functions");
 
 			struct obj_closure *closure =
-				obj_closure_new(AS_FUNCTION(AS_OBJ(v)));
+				obj_closure_new(vm, AS_FUNCTION(AS_OBJ(v)));
 
 			size_t offset = inst_arg_len(inst.op), i = 0;
 			uint32_t index, arg_len;
@@ -455,10 +463,12 @@ static int vm_run(struct vm *vm)
 		case OP_FALSE: xpush(vm, &BOOL_VAL(false)); break;
 
 		case OP_EQUAL: {
-			struct val b = pop(vm);
-			struct val a = pop(vm);
+			struct val b = peek(vm, 0);
+			struct val a = peek(vm, 1);
 
-			xpush(vm, &BOOL_VAL(values_equal(a, b)));
+			bool res = values_equal(a, b);
+			multipop(vm, 2);
+			xpush(vm, &BOOL_VAL(res));
 			break;
 		}
 
@@ -472,25 +482,34 @@ static int vm_run(struct vm *vm)
 
 		case OP_AND:
 		case OP_OR: {
-			struct val b = pop(vm);
-			struct val a = pop(vm);
+			struct val b = peek(vm, 0);
+			struct val a = peek(vm, 1);
+			bool res;
 			if (inst.op == OP_AND)
-				xpush(vm, &BOOL_VAL(!is_falsey(a) && !is_falsey(b)));
+				res = !is_falsey(a) && !is_falsey(b);
 			else
-				xpush(vm, &BOOL_VAL(!is_falsey(a) || !is_falsey(b)));
+				res = !is_falsey(a) || !is_falsey(b);
+			multipop(vm, 2);
+			xpush(vm, &BOOL_VAL(res));
 			break;
 		}
 
-		case OP_NOT:
-			xpush(vm, &BOOL_VAL(is_falsey(pop(vm))));
+		case OP_NOT: {
+			bool res = is_falsey(peek(vm, 0));
+			pop(vm);
+			xpush(vm, &BOOL_VAL(res));
 			break;
+		}
 
-		case OP_NEGATE:
+		case OP_NEGATE: {
 			if (!IS_NUM(peek(vm, 0)))
 				runtime_error("can only negatate numers");
 
-			xpush(vm, &NUM_VAL(-AS_NUM(pop(vm))));
+			double res = -AS_NUM(peek(vm, 0));
+			pop(vm);
+			xpush(vm, &NUM_VAL(res));
 			break;
+		}
 		}
 	}
 }

@@ -73,7 +73,7 @@ struct upvalue {
 
 struct compiler {
 	struct compiler *enclosing;
-	struct globals *globals;
+	struct vm *vm;
 	struct fstack_upvalues upvalues;
 	struct fstack_locals locals;
 	int scope_depth;
@@ -88,7 +88,7 @@ void chunk_compact(struct chunk *);
 
 void compiler_xinit(struct compiler *current,
 		    struct compiler *enclosing,
-		    struct globals *);
+		    struct vm *);
 
 void compiler_destroy(struct compiler *);
 

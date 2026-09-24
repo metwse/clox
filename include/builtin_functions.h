@@ -1,7 +1,6 @@
 #ifndef BUILTIN_FUNCTIONS
 #define BUILTIN_FUNCTIONS
 
-
 #include "object.h"
 
 #include <stddef.h>

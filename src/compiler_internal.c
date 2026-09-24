@@ -3,8 +3,8 @@
 
 #include "../include/chunk.h"
 #include "../include/common.h"
-#include "../include/globals.h"
 #include "../include/instructions.h"
+#include "../include/vm.h"
 
 #include "../vendor/libfun/include/stack.h"
 
@@ -24,10 +24,10 @@ static uint32_t add_upvalue(struct compiler *, uint32_t, bool);
 
 void compiler_xinit(struct compiler *current,
 		    struct compiler *enclosing,
-		    struct globals *globals)
+		    struct vm *vm)
 {
 	current->enclosing = enclosing;
-	current->globals = globals;
+	current->vm = vm;
 	current->line = 0;
 	current->scope_depth = 0;
 	fstack_locals_xinit(&current->locals);
@@ -214,8 +214,8 @@ static uint32_t resolve_and_save_global_reference(struct compiler *current,
 						  struct chunk *c,
 						  uint32_t str_id)
 {
-	uint32_t global_id = globals_xget_global_id(current->globals,
-								str_id);
+	uint32_t global_id = globals_xget_global_id(current->vm->globals,
+						    str_id);
 
 	for (size_t i = 0;
 	     i < fstack_chunk_referenced_global_ids_len(&c->referenced_global_ids);

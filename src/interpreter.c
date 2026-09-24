@@ -65,7 +65,8 @@ void interpreter_xinit(struct interpreter *i)
 		uint32_t global_id = globals_xget_global_id(&i->globals, str_id);
 
 		struct obj_native_function *native_function =
-			obj_native_function_new(builtin_function.function);
+			obj_native_function_new(&i->vm,
+						builtin_function.function);
 
 		globals_define(&i->globals,
 			       global_id,
@@ -108,8 +109,8 @@ int interpreter_run(struct interpreter *i, const char *source)
 
 		case RDESC_READY: {
 			struct chunk chunk =
-				chunk_xcompile(rdesc_get_root(&i->parser),
-					       &i->globals);
+				chunk_xcompile(&i->vm,
+					       rdesc_get_root(&i->parser));
 
 			chunk_disassemble(&chunk, stderr, 0, 0);
 

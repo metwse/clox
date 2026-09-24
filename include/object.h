@@ -15,6 +15,7 @@ struct vm;  /* defined in vm.h */
 
 #define AS_FUNCTION(o) ((struct obj_function *) o)
 #define AS_CLOSURE(o) ((struct obj_closure *) o)
+#define AS_UPVALUE(o) ((struct obj_upvalue *) o)
 #define AS_STR_LITERAL(o) ((struct obj_str_literal *) o)
 #define AS_NATIVE_FUNCTION(o) ((struct obj_native_function *) o)
 
@@ -29,6 +30,7 @@ enum obj_type {
 
 struct obj {
 	enum obj_type type;
+	bool is_marked;
 };
 
 
@@ -73,24 +75,28 @@ struct obj_str_literal {
 
 void obj_free(struct obj *);
 
-struct obj *obj_clone(const struct obj *);
-
 void obj_print(const struct obj *, const struct vm *);
 
 bool obj_is_equal(const struct obj *a, const struct obj *b);
 
 
-struct obj_function *obj_function_new(struct chunk,
+struct obj *obj_clone(struct vm *, const struct obj *);
+
+struct obj_function *obj_function_new(struct vm *,
+				      struct chunk,
 				      uint32_t arity,
 				      uint32_t upvalue_count);
 
-struct obj_closure *obj_closure_new(const struct obj_function *function);
+struct obj_closure *obj_closure_new(struct vm *,
+				    const struct obj_function *function);
 
-struct obj_upvalue *obj_upvalue_new(size_t location);
+struct obj_upvalue *obj_upvalue_new(struct vm *, size_t location);
 
-struct obj_native_function *obj_native_function_new(native_function_t *native_function);
+struct obj_native_function *obj_native_function_new(struct vm *,
+						    native_function_t *native_function);
 
-struct obj_str_literal *obj_str_literal_new(uint32_t str_literal_id);
+struct obj_str_literal *obj_str_literal_new(struct vm *,
+					    uint32_t str_literal_id);
 
 
 #endif
