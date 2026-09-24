@@ -250,6 +250,8 @@ static int vm_run(struct vm *vm)
 
 		switch (inst.op) {
 		case OP_RETURN: {
+			close_upvalues(vm, vm->current.fp);
+
 			if (fstack_call_frames_len(&vm->frames) == 0) {
 				print_val(vm, peek(vm, 0));
 				fstack_vals_clear(&vm->stack);
