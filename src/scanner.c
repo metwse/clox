@@ -95,12 +95,13 @@ static void advance(struct scanner *s)
 	} while (0)
 
 /* Token collecting functions. */
-static void collect_num(struct scanner *s,
-			enum tk_id *out_id,
-			struct seminfo *out_seminfo)
+static void collect_numeric(struct scanner *s,
+			    enum tk_id *out_id,
+			    struct seminfo *out_seminfo)
 {
 	const char *start = s->cur;
 	size_t len = 0;
+	bool is_float = false;
 
 	while (isdigit(peek(s))) {
 		advance(s);
@@ -108,6 +109,7 @@ static void collect_num(struct scanner *s,
 	}
 
 	if (peek(s) == '.' && isdigit(peek_next(s))) {
+		is_float = true;
 		advance(s);
 		len++;
 
@@ -121,10 +123,13 @@ static void collect_num(struct scanner *s,
 	num_str[len] = '\0';
 	memcpy(num_str, start, len);
 
-	double num = strtod(num_str, NULL);
-
-	out_seminfo->seminfo.num = num;
-	return_tk(TK_NUM);
+	if (is_float) {
+		out_seminfo->seminfo.number = Lw_str2number(num_str);
+		return_tk(TK_NUMBER);
+	} else {
+		out_seminfo->seminfo.integer = Lw_str2integer(num_str);
+		return_tk(TK_INTEGER);
+	}
 }
 
 static void collect_ident_or_keyword(struct scanner *s,
@@ -251,7 +256,7 @@ void scanner_xnext(struct scanner *s,
 	if (is_at_end(s))
 		return_tk(TK_EOF);
 	else if (isdigit(peek(s)))
-		collect_num(s, out_id, out_seminfo);
+		collect_numeric(s, out_id, out_seminfo);
 	else if (isalnum(peek(s)) || peek(s) == '_')
 		collect_ident_or_keyword(s, out_id, out_seminfo);
 	else if (peek(s) == '"')

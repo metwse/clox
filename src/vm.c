@@ -1,3 +1,5 @@
+#include "../include/config.h"
+
 #include "../include/chunk.h"
 #include "../include/common.h"
 #include "../include/instructions.h"
@@ -75,22 +77,19 @@ static bool values_equal(struct val a, struct val b)
 		return false;
 
 	switch (a.type) {
-	case VAL_NUM:
-		return AS_NUM(a) == AS_NUM(b);
+	case VAL_NUMBER:
+		return AS_NUMBER(a) == AS_NUMBER(b);
+	case VAL_INTEGER:
+		return AS_INTEGER(a) == AS_INTEGER(b);
 	case VAL_BOOL:
 		return AS_BOOL(a) == AS_BOOL(b);
-	case VAL_NIL:
+	case VAL_UNIT:
 		return true;
 	case VAL_OBJ:
 		return obj_is_equal(AS_OBJ(a), AS_OBJ(b));
 	}
 
 	return false; // unreachable;
-}
-
-static bool is_falsey(struct val v)
-{
-	return IS_NIL(v) || (IS_BOOL(v) && !AS_BOOL(v)) || (IS_NUM(v) && !AS_NUM(v));
 }
 
 static bool is_callable(struct val v)
@@ -109,14 +108,41 @@ static void recover_runtime_error(struct vm *vm);
 		return 1; \
 	} while (0)
 
-#define binary_op(val_type, op) do { \
-		if (!IS_NUM(peek(vm, 0)) || !IS_NUM(peek(vm, 1))) { \
+static bool is_numeric(struct val v)
+{
+	return IS_NUMBER(v) || IS_INTEGER(v);
+}
+
+#define comparison_binary_op(op) do { \
+		if (!is_numeric(peek(vm, 0)) || !is_numeric(peek(vm, 1))) \
 			runtime_error("operands must be numbers"); \
+		if (IS_NUMBER(peek(vm, 0)) || IS_NUMBER(peek(vm, 1))) { \
+			Lw_number_t b = AS_NUMBER(peek(vm, 0)); \
+			Lw_number_t a = AS_NUMBER(peek(vm, 1)); \
+			multipop(vm, 2); \
+			xpush(vm, &BOOL_VAL(a op b)); \
+		} else { \
+			Lw_integer_t b = AS_INTEGER(peek(vm, 0)); \
+			Lw_integer_t a = AS_INTEGER(peek(vm, 1)); \
+			multipop(vm, 2); \
+			xpush(vm, &BOOL_VAL(a op b)); \
 		} \
-		double b = AS_NUM(peek(vm, 0)); \
-		double a = AS_NUM(peek(vm, 1)); \
-		multipop(vm, 2); \
-		xpush(vm, &val_type(a op b)); \
+	} while (0)
+
+#define numeric_binary_op(op) do { \
+		if (!is_numeric(peek(vm, 0)) || !is_numeric(peek(vm, 1))) \
+			runtime_error("operands must be numbers"); \
+		if (IS_NUMBER(peek(vm, 0)) || IS_NUMBER(peek(vm, 1))) { \
+			Lw_number_t b = AS_NUMBER(peek(vm, 0)); \
+			Lw_number_t a = AS_NUMBER(peek(vm, 1)); \
+			multipop(vm, 2); \
+			xpush(vm, &NUMBER_VAL(a op b)); \
+		} else { \
+			Lw_integer_t b = AS_INTEGER(peek(vm, 0)); \
+			Lw_integer_t a = AS_INTEGER(peek(vm, 1)); \
+			multipop(vm, 2); \
+			xpush(vm, &INTEGER_VAL(a op b)); \
+		} \
 	} while (0)
 
 #define read_and_increment_pc do { \
@@ -348,11 +374,16 @@ static int vm_run(struct vm *vm)
 		case OP_JUMP_BACK: {
 			uint32_t jump = inst_get_u24_arg(inst, 0);
 
-			if (inst.op == OP_JUMP_BACK)
+			if (inst.op == OP_JUMP_BACK) {
 				vm->current.pc -= jump + inst_len(inst);
-			else if (inst.op == OP_JUMP ||
-			    is_falsey(peek(vm, 0)))
+			} else if (inst.op == OP_JUMP) {
 				vm->current.pc += jump;
+			}else if (inst.op == OP_JUMP_IF_FALSE) {
+				if (!IS_BOOL(peek(vm, 0)))
+					runtime_error("expected bool, got another type");
+				if (!AS_BOOL(peek(vm, 0)))
+					vm->current.pc += jump;
+			}
 
 			break;
 		}
@@ -435,7 +466,7 @@ static int vm_run(struct vm *vm)
 			break;
 		}
 
-		case OP_NIL: xpush(vm, &NIL_VAL); break;
+		case OP_UNIT: xpush(vm, &UNIT_VAL); break;
 		case OP_TRUE: xpush(vm, &BOOL_VAL(true)); break;
 		case OP_FALSE: xpush(vm, &BOOL_VAL(false)); break;
 
@@ -449,42 +480,54 @@ static int vm_run(struct vm *vm)
 			break;
 		}
 
-		case OP_GREATER: binary_op(BOOL_VAL, >); break;
-		case OP_LESS: binary_op(BOOL_VAL, <); break;
+		case OP_GREATER: comparison_binary_op(>); break;
+		case OP_LESS: comparison_binary_op(<); break;
 
-		case OP_ADD: binary_op(NUM_VAL, +); break;
-		case OP_SUBSTRACT: binary_op(NUM_VAL, -); break;
-		case OP_MULTIPLY: binary_op(NUM_VAL, *); break;
-		case OP_DIVIDE: binary_op(NUM_VAL, /); break;
+		case OP_ADD: numeric_binary_op(+); break;
+		case OP_SUBSTRACT: numeric_binary_op(-); break;
+		case OP_MULTIPLY: numeric_binary_op(*); break;
+		case OP_DIVIDE: numeric_binary_op(/); break;
 
 		case OP_AND:
 		case OP_OR: {
-			struct val b = peek(vm, 0);
-			struct val a = peek(vm, 1);
+			if (!IS_BOOL(peek(vm, 0)) || !IS_BOOL(peek(vm, 1)))
+				runtime_error("expected bool, got another type");
+
+			bool b = AS_BOOL(peek(vm, 0));
+			bool a = AS_BOOL(peek(vm, 1));
 			bool res;
 			if (inst.op == OP_AND)
-				res = !is_falsey(a) && !is_falsey(b);
+				res = a && b;
 			else
-				res = !is_falsey(a) || !is_falsey(b);
+				res = a || b;
 			multipop(vm, 2);
 			xpush(vm, &BOOL_VAL(res));
 			break;
 		}
 
 		case OP_NOT: {
-			bool res = is_falsey(peek(vm, 0));
+			if (!IS_BOOL(peek(vm, 0)))
+				runtime_error("expected bool, got another type");
+
+			bool res = !AS_BOOL(peek(vm, 0));
 			pop(vm);
 			xpush(vm, &BOOL_VAL(res));
 			break;
 		}
 
 		case OP_NEGATE: {
-			if (!IS_NUM(peek(vm, 0)))
+			if (!is_numeric(peek(vm, 0)))
 				runtime_error("can only negatate numers");
 
-			double res = -AS_NUM(peek(vm, 0));
-			pop(vm);
-			xpush(vm, &NUM_VAL(res));
+			if (IS_NUMBER(peek(vm, 0))) {
+				Lw_number_t res = -AS_NUMBER(peek(vm, 0));
+				pop(vm);
+				xpush(vm, &NUMBER_VAL(res));
+			} else {
+				Lw_integer_t res = -AS_INTEGER(peek(vm, 0));
+				pop(vm);
+				xpush(vm, &INTEGER_VAL(res));
+			}
 			break;
 		}
 		}

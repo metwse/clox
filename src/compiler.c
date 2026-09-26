@@ -19,8 +19,8 @@
 
 #define SEMINFO(n) (((struct seminfo *) rseminfo(n))->seminfo)
 
-#define SEMINFO_NUM(n) (SEMINFO(n).num)
-
+#define SEMINFO_NUMBER(n) (SEMINFO(n).number)
+#define SEMINFO_INTEGER(n) (SEMINFO(n).integer)
 #define SEMINFO_STR_ID(n) (SEMINFO(n).str_id)
 
 
@@ -238,15 +238,19 @@ static void compile_expression(struct chunk *c,
 		break;
 
 	case NT_PRIMARY:
-		if (is_lvalue && ralt_idx(n) < 4) /* TODO: rvalue error handling */
+		if (is_lvalue && ralt_idx(n) < 5) /* TODO: rvalue error handling */
 			Lw_fatal("expression is not assignable");
 
 		switch (ralt_idx(n)) {
 		case 0:
-			emit_const(NUM_VAL(SEMINFO_NUM(rchild(n, 0))));
+			emit_const(NUMBER_VAL(SEMINFO_NUMBER(rchild(n, 0))));
 			break;
 
-		case 1: {
+		case 1:
+			emit_const(INTEGER_VAL(SEMINFO_INTEGER(rchild(n, 0))));
+			break;
+
+		case 2: {
 			struct obj_str_literal *obj =
 				obj_str_literal_new(current->vm,
 						    SEMINFO_STR_ID(rchild(n, 0)));
@@ -255,19 +259,19 @@ static void compile_expression(struct chunk *c,
 			break;
 		}
 
-		case 2:
+		case 3:
 			emit_inst(OP_TRUE);
 			break;
 
-		case 3:
+		case 4:
 			emit_inst(OP_FALSE);
 			break;
 
-		case 4:
+		case 5:
 			compile_expression(c, rchild(n, 1), current, is_lvalue);
 			break;
 
-		case 5: {
+		case 6: {
 			uint32_t str_id = SEMINFO_STR_ID(rchild(n, 0));
 
 			if (is_lvalue)
@@ -307,7 +311,7 @@ static void compile_var_decl(struct chunk *c,
 	if (ralt_idx(optasgn) == 0) {
 		compile_expression(c, rchild(optasgn, 1), current, false);
 	} else {
-		emit_inst(OP_NIL);
+		emit_inst(OP_UNIT);
 	}
 
 	uint32_t str_id = SEMINFO_STR_ID(rchild(n, 1));
@@ -542,7 +546,7 @@ static void compile_function_decl(struct chunk *c,
 
 	compile_block(&new_chunk, rchild(n, 4), &enclosed);
 
-	emit_inst(OP_NIL);
+	emit_inst(OP_UNIT);
 	emit_inst(OP_RETURN);
 
 	c = hold_c;
@@ -573,7 +577,7 @@ static void compile_return_stmt(struct chunk *c,
 	if (ralt_idx(optexpr) == 0) {
 		compile_expression(c, rchild(optexpr, 0), current, false);
 	} else {
-		emit_inst(OP_NIL);
+		emit_inst(OP_UNIT);
 	}
 
 	emit_inst(OP_RETURN);
@@ -608,7 +612,7 @@ struct chunk chunk_xcompile(struct vm *vm, struct rdesc_node n)
 	compiler_xinit(&current, NULL, vm);
 
 	compile_decl(&c, n, &current);
-	chunk_xwrite_inst(&c, current.line, (struct inst) { .op = OP_NIL });
+	chunk_xwrite_inst(&c, current.line, (struct inst) { .op = OP_UNIT });
 	chunk_xwrite_inst(&c, current.line, (struct inst) { .op = OP_RETURN });
 
 	compiler_destroy(&current);

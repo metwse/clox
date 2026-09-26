@@ -48,7 +48,7 @@ enum opcode {
 	DEF_U8OR24(OP_CLOSURE),
 	OP_CALL,
 
-	OP_NIL,
+	OP_UNIT,
 	OP_TRUE,
 	OP_FALSE,
 
@@ -89,7 +89,7 @@ static const char *const opcode_names[LAST_OPCODE + 1] = {
 	DEF_U8OR24("CLOSURE"),
 	"CALL",
 
-	"NIL",
+	"UNIT",
 	"TRUE",
 	"FALSE",
 

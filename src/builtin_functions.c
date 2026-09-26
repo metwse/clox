@@ -1,6 +1,9 @@
+#include "../include/config.h"
+
 #include "../include/builtin_functions.h"
 #include "../include/common.h"
 #include "../include/gc.h"
+#include "../include/string_pool.h"
 #include "../include/value.h"
 #include "../include/vm.h"
 
@@ -15,7 +18,7 @@ static struct val hello_world(struct vm *vm _unused,
 {
 	printf("Hello, world! Got %"PRIu32" arguments.\n", argc);
 
-	return NIL_VAL;
+	return UNIT_VAL;
 }
 
 static struct val gc_run(struct vm *vm,
@@ -34,7 +37,7 @@ static struct val gc_run(struct vm *vm,
 	       (size_t) 0, (size_t) 0);
 
 	vm_gc_sweep(vm);
-	return NIL_VAL;
+	return UNIT_VAL;
 }
 
 static struct val print(struct vm *vm _unused,
@@ -45,16 +48,20 @@ static struct val print(struct vm *vm _unused,
 		struct val v = argv[i];
 
 		switch (v.type) {
-		case VAL_NUM:
-			printf("%g", AS_NUM(v));
+		case VAL_NUMBER:
+			printf("%"Lw_number_fmt, AS_NUMBER(v));
+			break;
+
+		case VAL_INTEGER:
+			printf("%"Lw_integer_fmt, AS_INTEGER(v));
 			break;
 
 		case VAL_BOOL:
 			printf(AS_BOOL(v) ? "true" : "false");
 			break;
 
-		case VAL_NIL:
-			printf("nil");
+		case VAL_UNIT:
+			printf("()");
 			break;
 
 		case VAL_OBJ:
@@ -66,7 +73,7 @@ static struct val print(struct vm *vm _unused,
 			putc(' ', stdout);
 	}
 
-	return NIL_VAL;
+	return UNIT_VAL;
 }
 
 static struct val println(struct vm *vm,
@@ -76,7 +83,20 @@ static struct val println(struct vm *vm,
 	print(vm, argv, argc);
 	putc('\n', stdout);
 
-	return NIL_VAL;
+	return UNIT_VAL;
+}
+
+static struct val typeof(struct vm *vm,
+			 struct val argv[],
+			 uint32_t argc)
+{
+	Lw_assert(argc == 1, "expected one argument");
+
+	uint32_t str_literal_id = str_pool_xget_id(vm->strings,
+						   val_names[argv[0].type],
+						   strlen(val_names[argv[0].type]));
+
+	return OBJ_VAL((struct obj *) obj_str_literal_new(vm, str_literal_id));
 }
 
 struct builtin_function builtin_functions[] = {
@@ -84,6 +104,7 @@ struct builtin_function builtin_functions[] = {
 	{ "gc_run", gc_run },
 	{ "print", print },
 	{ "println", println },
+	{ "typeof", typeof },
 };
 
-size_t builtin_functions_len = 4;
+size_t builtin_functions_len = 5;

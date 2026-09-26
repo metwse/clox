@@ -11,7 +11,7 @@ const char *const tk_names[TK_COUNT] = {
 
 	"&&",
 
-	"@IDENT", "@STR", "@NUM",
+	"@IDENT", "@STR", "@NUMBER", "@INTEGER",
 
 	/* generated using :'<,'>s/TK_\(\w*\)/"\L\1"/g */
 	"break", "continue", "else", "enum", "false", "fn", "for",
@@ -176,7 +176,8 @@ alt	EPSILON
 ),
 
 /* <primary> ::= */ r(
-	TK(NUM)
+	TK(NUMBER)
+alt	TK(INTEGER)
 alt	TK(STR)
 alt	TK(TRUE)
 alt	TK(FALSE)

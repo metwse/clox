@@ -1,10 +1,12 @@
 #ifndef GRAMMAR_H
 #define GRAMMAR_H
 
+#include "config.h"
+
 #include "../vendor/rdesc/include/grammar.h"
 
 
-#define TK_COUNT 51
+#define TK_COUNT 52
 
 #define NT_COUNT 46
 #define NT_MAX_ALTERNATIVE_COUNT 10
@@ -30,7 +32,7 @@ enum tk_id {
 	TK_AND_AND,
 
 	/* Literals. */
-	TK_IDENT, TK_STR, TK_NUM,
+	TK_IDENT, TK_STR, TK_NUMBER, TK_INTEGER,
 
 	/* Keywords. */
 	TK_BREAK, TK_CONTINUE, TK_ELSE, TK_ENUM, TK_FALSE, TK_FN, TK_FOR,
@@ -72,7 +74,8 @@ enum nt_id {
 
 union seminfo_data {
 	uint32_t str_id  /* TK_STR or TK_IDENT */;
-	double num  /* TK_NUM */;
+	Lw_number_t number  /* TK_NUMBER */;
+	Lw_integer_t integer  /* TK_INTEGER */;
 };
 
 struct seminfo {
