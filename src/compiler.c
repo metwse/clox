@@ -238,7 +238,7 @@ static void compile_expression(struct chunk *c,
 		break;
 
 	case NT_PRIMARY:
-		if (is_lvalue && ralt_idx(n) < 6) /* TODO: rvalue error handling */
+		if (is_lvalue && ralt_idx(n) < 4) /* TODO: rvalue error handling */
 			Lw_fatal("expression is not assignable");
 
 		switch (ralt_idx(n)) {
@@ -264,22 +264,10 @@ static void compile_expression(struct chunk *c,
 			break;
 
 		case 4:
-			emit_inst(OP_NIL);
-			break;
-
-		case 5:
 			compile_expression(c, rchild(n, 1), current, is_lvalue);
 			break;
 
-		case 6:
-			Lw_fatal("'this' keyword is not implemented yet");
-			break;
-
-		case 7:
-			Lw_fatal("attr inheritance is not implemented yet");
-			break;
-
-		case 8: {
+		case 5: {
 			uint32_t str_id = SEMINFO_STR_ID(rchild(n, 0));
 
 			if (is_lvalue)
@@ -298,7 +286,7 @@ static void compile_args(struct chunk *c,
 			 struct compiler *current,
 			 uint32_t *arg_count)
 {
-	bool first = rid(n) == NT_FUNCTION_ARGS;
+	bool first = rid(n) == NT_FN_ARGS;
 	if (!first && ralt_idx(n) == 1)
 		return;
 
@@ -347,7 +335,7 @@ static void compile_if_stmt(struct chunk *c,
 			    struct rdesc_node n,
 			    struct compiler *current)
 {
-	compile_expression(c, rchild(n, 2), current, false);
+	compile_expression(c, rchild(n, 1), current, false);
 
 	emit_inst(OP_JUMP_IF_FALSE);
 	size_t if_inst = chunk_len(c) - inst_arg_len(OP_JUMP_IF_FALSE) - 1;
@@ -355,7 +343,7 @@ static void compile_if_stmt(struct chunk *c,
 	size_t then_start = chunk_len(c);
 
 	emit_inst(OP_POP);
-	compile_stmt(c, rchild(n, 4), current);
+	compile_block(c, rchild(n, 2), current);
 
 	emit_inst(OP_JUMP);
 	size_t else_inst = chunk_len(c) - inst_arg_len(OP_JUMP) - 1;
@@ -365,10 +353,10 @@ static void compile_if_stmt(struct chunk *c,
 	size_t then_end = chunk_len(c);
 	emit_inst(OP_POP);
 
-	struct rdesc_node else_n = rchild(n, 5);
+	struct rdesc_node else_n = rchild(n, 3);
 	if (ralt_idx(else_n) == 0) {
 		update_line(rchild(else_n, 0));
-		compile_stmt(c, rchild(else_n, 1), current);
+		compile_block(c, rchild(else_n, 1), current);
 	}
 
 	size_t else_end = chunk_len(c);
@@ -444,14 +432,14 @@ static void compile_while_stmt(struct chunk *c,
 {
 	size_t condition_expr_start = chunk_len(c);
 
-	compile_expression(c, rchild(n, 2), current, false);  /* condition expr */
+	compile_expression(c, rchild(n, 1), current, false);  /* condition expr */
 
 	emit_inst(OP_JUMP_IF_FALSE);  /* to end of the for loop */
 	size_t break_inst = chunk_len(c) - inst_arg_len(OP_JUMP_IF_FALSE) - 1;
 	size_t while_body_start = chunk_len(c);
 	emit_inst(OP_POP);
 
-	compile_stmt(c, rchild(n, 4), current);
+	compile_block(c, rchild(n, 2), current);
 
 	size_t before_continue = chunk_len(c);
 	emit_inst(OP_JUMP_BACK);  /* to the condition expr start */
@@ -486,17 +474,9 @@ static void compile_stmt(struct chunk *c,
 		break;
 
 	case NT_IF_STMT:
-		/* if ( <expr> ) <stmt> <if_optelse_stmt> */
+		/* if <expr> <block> <if_optelse_stmt> */
 		update_line(rchild(n, 0));
 		compile_if_stmt(c, n, current);
-		break;
-
-	case NT_PRINT_STMT:
-		/* print <expr> ; */
-		update_line(rchild(n, 0));
-		compile_expression(c, rchild(n, 1), current, false);
-		emit_inst(OP_PRINT);
-		update_line(rchild(n, 2));
 		break;
 
 	case NT_RETURN_STMT:
@@ -506,7 +486,7 @@ static void compile_stmt(struct chunk *c,
 		break;
 
 	case NT_WHILE_STMT:
-		/* while ( <expr> ) <stmt> */
+		/* while <expr> <block> */
 		update_line(rchild(n, 0));
 		compile_while_stmt(c, n, current);
 		break;
@@ -605,18 +585,14 @@ static void compile_decl(struct chunk *c,
 {
 	switch (ralt_idx(n)) {
 	case 0:
-		Lw_fatal("classes are not implemented yet");
-		break;
-
-	case 1:
 		compile_function_decl(c, rchild(n, 0), current);
 		break;
 
-	case 2:
+	case 1:
 		compile_var_decl(c, rchild(n, 0), current);
 		break;
 
-	case 3:
+	case 2:
 		compile_stmt(c, rchild(n, 0), current);
 		break;
 	}

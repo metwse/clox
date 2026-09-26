@@ -88,27 +88,6 @@ static bool values_equal(struct val a, struct val b)
 	return false; // unreachable;
 }
 
-static void print_val(struct vm *vm, struct val v)
-{
-	switch (v.type) {
-	case VAL_NUM:
-		printf("%g\n", AS_NUM(v));
-		break;
-
-	case VAL_BOOL:
-		printf(AS_BOOL(v) ? "true\n" : "false\n");
-		break;
-
-	case VAL_NIL:
-		printf("nil\n");
-		break;
-
-	case VAL_OBJ:
-		obj_print(AS_OBJ(v), vm);
-		break;
-	}
-}
-
 static bool is_falsey(struct val v)
 {
 	return IS_NIL(v) || (IS_BOOL(v) && !AS_BOOL(v)) || (IS_NUM(v) && !AS_NUM(v));
@@ -179,7 +158,8 @@ static int call(struct vm *vm, struct obj *callable, uint32_t arg_count)
 			const struct val *popped_args = peek_ref(vm, arg_count);
 
 			struct val args[arg_count];
-			memcpy(args, popped_args, sizeof(struct val) * arg_count);
+			for (uint32_t i = 0; i < arg_count; i++)
+				args[i] = popped_args[arg_count - i];
 
 			res = native_function->function(vm, args, arg_count);
 		} else {
@@ -201,6 +181,7 @@ static int call(struct vm *vm, struct obj *callable, uint32_t arg_count)
 static void recover_runtime_error(struct vm *vm)
 {
 	fstack_vals_clear(&vm->stack);
+	fstack_call_frames_clear(&vm->frames);
 }
 
 static struct obj_upvalue *capture_upvalue(struct vm *vm, size_t local)
@@ -253,7 +234,6 @@ static int vm_run(struct vm *vm)
 			close_upvalues(vm, vm->current.fp);
 
 			if (fstack_call_frames_len(&vm->frames) == 0) {
-				print_val(vm, peek(vm, 0));
 				fstack_vals_clear(&vm->stack);
 
 				return 0;
@@ -276,11 +256,6 @@ static int vm_run(struct vm *vm)
 			}
 			break;
 		}
-
-		case OP_PRINT:
-			print_val(vm, peek(vm, 0));
-			pop(vm);
-			break;
 
 		case OP_POP:
 			pop(vm);

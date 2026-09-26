@@ -2,79 +2,74 @@
 
 #include "../vendor/rdesc/include/rule_macros.h"
 
-#include "stdlib.h"
-
 
 const char *const tk_names[TK_COUNT] = {
-	"(", ")", "{", "}", ",", ".", "-", "+", ";", "/", "*",
+	"{", "}", "(", ")", "[", "]",
+	":", ",", ".", "+", ";", "/", "*",
 
-	"!", "!=", "=", "==", ">", ">=", "<", "<=",
+	"!", "!=", "=", "==", ">", ">=", "<", "<=", "-", "->", "|", "||",
+
+	"&&",
 
 	"@IDENT", "@STR", "@NUM",
 
-	"and", "class", "else", "false", "for", "fun", "if", "nil", "or",
-	"print", "return", "super", "this", "true", "var", "while",
+	/* generated using :'<,'>s/TK_\(\w*\)/"\L\1"/g */
+	"break", "continue", "else", "enum", "false", "fn", "for",
+	"if", "impl", "let", "loop", "return", "self", "self_ty",
+	"struct", "trait", "true", "type", "where", "while",
 
 	"@eof", "@invalid"
 };
 
+/* generated using :'<,'>s/NT_\(\w*\)/"\L\1"/g */
 const char *const nt_names[NT_COUNT] = {
 	"decl",
-	"class_decl", "fun_decl", "var_decl",
+	"fn_decl", "var_decl",
 	"stmt",
 
 	"expr_stmt",
 	"for_stmt", "for_stmt_decl",
 	"if_stmt", "if_optelse_stmt",
-	"print_stmt",
 	"return_stmt",
 	"while_stmt",
 	"block", "block_decls",
 
-	"expression", "optexpression",
-	"asgn", "asgn_opteq",
-	"logic_or", "logic_or_rest",
-	"logic_and", "logic_and_rest",
-	"equality", "equality_rest", "equality_op",
-	"comparison", "comparison_rest", "comparison_op",
-	"term", "term_rest", "term_op",
-	"factor", "factor_rest", "factor_op",
+	"expression", "optexpression",  /* expressions */
+	"asgn", "asgn_opteq",  /* = */
+	"logic_or", "logic_or_rest",  /* or */
+	"logic_and", "logic_and_rest",  /* and */
+	"equality", "equality_rest", "equality_op",  /* ==, != */
+	"comparison", "comparison_rest", "comparison_op",  /* >, >=, <, <= */
+	"term", "term_rest", "term_op",  /* +, - */
+	"factor", "factor_rest", "factor_op",  /* *, / */
 	"unary", "unary_op",
 	"call", "call_optargs_or_getattr",
 	"primary",
 
-	"class_decl_optinheritance", "class_decl_functions",
 	"var_decl_optasgn",
-	"function",
-	"function_params", "function_params_rest", "function_optparams",
-	"function_args", "function_args_rest", "function_optargs",
+	"fn",
+	"fn_params", "fn_params_rest", "fn_optparams",
+	"fn_args", "fn_args_rest", "fn_optargs",
 };
 
 const struct rdesc_grammar_symbol production_rules
 	[NT_COUNT][NT_MAX_ALTERNATIVE_COUNT + 1][NT_MAX_ALTERNATIVE_SIZE + 1] = {
 /* <decl> ::= */ r(
-	NT(CLASS_DECL)
-alt	NT(FUN_DECL)
+	NT(FN_DECL)
 alt	NT(VAR_DECL)
 alt	NT(STMT)
 ),
 
-/* <class-decl> ::= */ r(
-	TK(CLASS), TK(IDENT), NT(CLASS_DECL_OPTINHERITANCE),
-		TK(LBRACE), NT(CLASS_DECL_FUNCTIONS), TK(RBRACE)
-
-),
-/* <fun-decl> ::= */ r(
-	TK(FUN), NT(FUNCTION)
+/* <fn-decl> ::= */ r(
+	TK(FN), NT(FN)
 ),
 /* <var-decl> ::= */ r(
-	TK(VAR), TK(IDENT), NT(VAR_DECL_OPTASGN), TK(SEMI)
+	TK(LET), TK(IDENT), NT(VAR_DECL_OPTASGN), TK(SEMI)
 ),
 /* <stmt> ::= */ r(
 	NT(EXPR_STMT)
 alt	NT(FOR_STMT)
 alt	NT(IF_STMT)
-alt	NT(PRINT_STMT)
 alt	NT(RETURN_STMT)
 alt	NT(WHILE_STMT)
 alt	NT(BLOCK)
@@ -94,21 +89,17 @@ alt	NT(EXPR_STMT)
 alt	TK(SEMI)
 ),
 /* <if-stmt> ::= */ r(
-	TK(IF), TK(LPAREN), NT(EXPRESSION), TK(RPAREN), NT(STMT),
-		NT(IF_OPTELSE_STMT)
+	TK(IF), NT(EXPRESSION), NT(BLOCK), NT(IF_OPTELSE_STMT)
 ),
 /* <if-optelse-stmt> ::= */ r(
-	TK(ELSE), NT(STMT)
+	TK(ELSE), NT(BLOCK)
 alt	EPSILON
-),
-/* <print-stmt> ::= */ r(
-	TK(PRINT), NT(EXPRESSION), TK(SEMI)
 ),
 /* <return-stmt> ::= */ r(
 	TK(RETURN), NT(OPTEXPRESSION), TK(SEMI)
 ),
 /* <while-stmt> ::= */ r(
-	TK(WHILE), TK(LPAREN), NT(EXPRESSION), TK(RPAREN), NT(STMT)
+	TK(WHILE), NT(EXPRESSION), NT(BLOCK)
 ),
 /* <block> ::= */ r(
 	TK(LBRACE), NT(BLOCK_DECLS), TK(RBRACE)
@@ -131,9 +122,9 @@ alt	EPSILON
 	ropt(TK(EQ), NT(ASGN)),
 
 /* <logic-or> ::= */
-	rrr(LOGIC_OR, (NT(LOGIC_AND)), (TK(OR), NT(LOGIC_AND))),
+	rrr(LOGIC_OR, (NT(LOGIC_AND)), (TK(PIPE_PIPE), NT(LOGIC_AND))),
 /* <logic-and> ::= */
-	rrr(LOGIC_AND, (NT(EQUALITY)), (TK(AND), NT(EQUALITY))),
+	rrr(LOGIC_AND, (NT(EQUALITY)), (TK(AND_AND), NT(EQUALITY))),
 
 /* <equality> ::= */
 	rrr(EQUALITY, (NT(COMPARISON)), (NT(EQUALITY_OP), NT(COMPARISON))),
@@ -179,7 +170,7 @@ alt	TK(EXCL)
 	NT(PRIMARY), NT(CALL_OPTARGS_OR_GETATTR)
 ),
 /* <call-optargs-or-get> ::= */ r(
-	TK(LPAREN), NT(FUNCTION_OPTARGS), TK(RPAREN), NT(CALL_OPTARGS_OR_GETATTR)
+	TK(LPAREN), NT(FN_OPTARGS), TK(RPAREN), NT(CALL_OPTARGS_OR_GETATTR)
 alt	TK(DOT), TK(IDENT), NT(CALL_OPTARGS_OR_GETATTR)
 alt	EPSILON
 ),
@@ -189,30 +180,22 @@ alt	EPSILON
 alt	TK(STR)
 alt	TK(TRUE)
 alt	TK(FALSE)
-alt	TK(NIL)
 alt	TK(LPAREN), NT(EXPRESSION), TK(RPAREN)
-alt	TK(THIS)
-alt	TK(SUPER), TK(DOT), TK(IDENT)
 alt	TK(IDENT)
 ),
-
-/* <class-decl-optinheritance> ::= */
-	ropt(TK(GT), TK(IDENT)),
-/* <class-decl-functions> ::= */
-	ropt(NT(FUNCTION), NT(CLASS_DECL_FUNCTIONS)),
 
 /* <var-decl-optasgn> ::= */
 	ropt(TK(EQ), NT(EXPRESSION)),
 
-/* <function> ::= */ r(
-	TK(IDENT), TK(LPAREN), NT(FUNCTION_OPTPARAMS), TK(RPAREN), NT(BLOCK)
+/* <fn> ::= */ r(
+	TK(IDENT), TK(LPAREN), NT(FN_OPTPARAMS), TK(RPAREN), NT(BLOCK)
 ),
-/* <function-params> ::= */
-	rrr(FUNCTION_PARAMS, (TK(IDENT)), (TK(COMMA), TK(IDENT))),
-/* <function-optparams> ::= */
-	ropt(NT(FUNCTION_PARAMS)),
-/* <function-args> ::= */
-	rrr(FUNCTION_ARGS, (NT(EXPRESSION)), (TK(COMMA), NT(EXPRESSION))),
-/* <function-optargs> ::= */
-	ropt(NT(FUNCTION_ARGS))
+/* <fn-params> ::= */
+	rrr(FN_PARAMS, (TK(IDENT)), (TK(COMMA), TK(IDENT))),
+/* <fn-optparams> ::= */
+	ropt(NT(FN_PARAMS)),
+/* <fn-args> ::= */
+	rrr(FN_ARGS, (NT(EXPRESSION)), (TK(COMMA), NT(EXPRESSION))),
+/* <fn-optargs> ::= */
+	ropt(NT(FN_ARGS))
 };

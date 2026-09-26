@@ -24,7 +24,7 @@ void scanner_xstatic_init(void)
 	/* strlen excludes null-terminator. the scanner will pass non-null
 	 * terminated string views, so we cannot use xinsert3 here as it adds
 	 * null-terminator to keys */
-	for (enum tk_id i = TK_AND; i <= TK_WHILE; i++)
+	for (enum tk_id i = TK_BREAK; i <= TK_WHILE; i++)
 		fhmap_keywords_xinsert(&keywords,
 				       tk_names[i],
 				       strlen(tk_names[i]),
@@ -156,7 +156,7 @@ static void collect_punct(struct scanner *s,
 {
 	char c = peek(s);
 
-	for (enum tk_id i = TK_LPAREN; i <= TK_STAR; i++) {
+	for (enum tk_id i = TK_LBRACE; i <= TK_STAR; i++) {
 		if (c == tk_names[i][0]) {
 			advance(s);
 
@@ -164,7 +164,7 @@ static void collect_punct(struct scanner *s,
 		}
 	}
 
-	for (enum tk_id i = TK_EXCL_EQ; i <= TK_LT_EQ; i += 2) {
+	for (enum tk_id i = TK_EXCL_EQ; i <= TK_PIPE_PIPE; i += 2) {
 		if (c == tk_names[i][0]) {
 			advance(s);
 			if (peek(s) == tk_names[i][1]) {
@@ -173,6 +173,17 @@ static void collect_punct(struct scanner *s,
 				return_tk(i);
 			} else {
 				return_tk(i - 1);
+			}
+		}
+	}
+
+	for (enum tk_id i = TK_AND_AND; i <= TK_AND_AND; i++) {
+		if (c == tk_names[i][0]) {
+			advance(s);
+			if (peek(s) == tk_names[i][1]) {
+				advance(s);
+
+				return_tk(i);
 			}
 		}
 	}

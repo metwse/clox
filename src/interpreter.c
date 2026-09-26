@@ -111,7 +111,7 @@ int interpreter_run(struct interpreter *i, const char *source)
 				chunk_xcompile(&i->vm,
 					       rdesc_get_root(&i->parser));
 
-			chunk_disassemble(&chunk, stderr, 0, 0);
+			/* chunk_disassemble(&chunk, stderr, 0, 0); */
 
 			if (vm_execute(&i->vm, &chunk))
 				Lw_report("execution interrupted due to a "

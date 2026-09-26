@@ -5,6 +5,7 @@
 #include "../include/vm.h"
 
 #include <inttypes.h>
+#include <stdint.h>
 #include <stdio.h>
 
 
@@ -36,9 +37,53 @@ static struct val gc_run(struct vm *vm,
 	return NIL_VAL;
 }
 
+static struct val print(struct vm *vm _unused,
+			struct val argv[],
+			uint32_t argc)
+{
+	for (uint32_t i = 0; i < argc; i++) {
+		struct val v = argv[i];
+
+		switch (v.type) {
+		case VAL_NUM:
+			printf("%g", AS_NUM(v));
+			break;
+
+		case VAL_BOOL:
+			printf(AS_BOOL(v) ? "true" : "false");
+			break;
+
+		case VAL_NIL:
+			printf("nil");
+			break;
+
+		case VAL_OBJ:
+			obj_print(AS_OBJ(v), vm);
+			break;
+		}
+
+		if (i != argc - 1)
+			putc(' ', stdout);
+	}
+
+	return NIL_VAL;
+}
+
+static struct val println(struct vm *vm,
+			  struct val argv[],
+			  uint32_t argc)
+{
+	print(vm, argv, argc);
+	putc('\n', stdout);
+
+	return NIL_VAL;
+}
+
 struct builtin_function builtin_functions[] = {
 	{ "hello_world", hello_world },
 	{ "gc_run", gc_run },
+	{ "print", print },
+	{ "println", println },
 };
 
-size_t builtin_functions_len = 2;
+size_t builtin_functions_len = 4;

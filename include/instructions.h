@@ -30,7 +30,6 @@ union op_closure_arg {
 #define DEF_U8OR24(name) name, name ## _LONG
 enum opcode {
 	OP_RETURN,
-	OP_PRINT,
 	OP_POP,
 	OP_CLOSE_UPVALUE,
 
@@ -72,7 +71,6 @@ enum opcode {
 #define DEF_U8OR24(name) name, name "_LONG"
 static const char *const opcode_names[LAST_OPCODE + 1] = {
 	"RETURN",
-	"PRINT",
 	"POP",
 	"CLOSE_UPVALUE",
 

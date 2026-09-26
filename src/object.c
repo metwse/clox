@@ -65,7 +65,7 @@ void obj_print(const struct obj *o, const struct vm *vm)
 {
 	switch (OBJ_TYPE(o)) {
 	case OBJ_FUNCTION:
-		printf("<fn>\n");
+		printf("<fn>");
 		break;
 
 	case OBJ_CLOSURE:
@@ -73,7 +73,7 @@ void obj_print(const struct obj *o, const struct vm *vm)
 		break;
 
 	case OBJ_NATIVE_FUNCTION:
-		printf("<native fn>\n");
+		printf("<native fn>");
 		break;
 
 	case OBJ_UPVALUE:
@@ -88,7 +88,7 @@ void obj_print(const struct obj *o, const struct vm *vm)
 					     &out_chars,
 					     &out_len),
 			    "str literal not found, possibly GC'ed!");
-		printf("%.*s\n", (int) out_len, out_chars);
+		printf("%.*s", (int) out_len, out_chars);
 		break;
 	}
 	}
