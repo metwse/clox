@@ -23,25 +23,25 @@ void test_input(struct scanner *s,
 	for (size_t i = 0; i < len; i++) {
 		scanner_xnext(s, &tk_id, &seminfo);
 
-		clox_assert(tk_id == ids[i],
-			    "token type missmatch");
+		Lw_assert(tk_id == ids[i],
+			  "token type missmatch");
 
 		if (tk_id == TK_IDENT)
-			clox_assert(seminfo.seminfo.str_id == seminfos[i].str_id,
-				    "str_id missmatch (ident)");
+			Lw_assert(seminfo.seminfo.str_id == seminfos[i].str_id,
+				  "str_id missmatch (ident)");
 
 		if (tk_id == TK_NUM)
-			clox_assert(seminfo.seminfo.num == seminfos[i].num,
-				    "num missmatch");
+			Lw_assert(seminfo.seminfo.num == seminfos[i].num,
+				  "num missmatch");
 
 		if (tk_id == TK_STR) {
-			clox_assert(seminfo.seminfo.str_id == seminfos[i].str_id,
-				    "str_id missmatch (str)");
+			Lw_assert(seminfo.seminfo.str_id == seminfos[i].str_id,
+				  "str_id missmatch (str)");
 		}
 	}
 
 	scanner_xnext(s, &tk_id, &seminfo);
-	clox_assert(tk_id == TK_EOF || tk_id == TK_INVALID, "still has tokens");
+	Lw_assert(tk_id == TK_EOF || tk_id == TK_INVALID, "still has tokens");
 }
 
 void test_str_pool_id(struct str_pool *p, uint32_t id, const char *str)
@@ -52,11 +52,11 @@ void test_str_pool_id(struct str_pool *p, uint32_t id, const char *str)
 	str_pool_get_chars(p, id, &out_chars, &out_len);
 
 	if (id == UINT32_MAX)
-		clox_assert(out_len == 0,
-			    "zero-length string should have id UINT32_MAX");
+		Lw_assert(out_len == 0,
+			  "zero-length string should have id UINT32_MAX");
 	else
-		clox_assert(memcmp(str, out_chars, out_len) == 0,
-			    "string pool missmatch");
+		Lw_assert(memcmp(str, out_chars, out_len) == 0,
+			  "string pool missmatch");
 }
 
 

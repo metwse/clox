@@ -42,7 +42,7 @@ void vm_destroy(struct vm *vm)
 struct obj *vm_obj_alloc(struct vm *vm, size_t size)
 {
 	struct obj *o = malloc(size);
-	clox_assert(o != NULL, "memory allocation error");
+	Lw_assert(o != NULL, "memory allocation error");
 
 	fstack_objects_xpush(&vm->objects, &o);
 
@@ -125,7 +125,7 @@ static bool is_callable(struct val v)
 /* TODO: query line info */
 static void recover_runtime_error(struct vm *vm);
 #define runtime_error(...) do { \
-		clox_report(__VA_ARGS__); \
+		Lw_report(__VA_ARGS__); \
 		recover_runtime_error(vm); \
 		return 1; \
 	} while (0)
@@ -267,8 +267,8 @@ static int vm_run(struct vm *vm)
 				/* overwrite function address with the result*/
 				multipop(vm, fstack_vals_len(&vm->stack) - vm->current.fp);
 
-				clox_assert(fstack_vals_len(&vm->stack) == vm->current.fp,
-					    "inconsistent stack");
+				Lw_assert(fstack_vals_len(&vm->stack) == vm->current.fp,
+					  "inconsistent stack");
 				vm->current = frame;
 				fstack_call_frames_pop(&vm->frames);
 
@@ -426,8 +426,8 @@ static int vm_run(struct vm *vm)
 			struct val v = *fstack_vals_at(&c->constants,
 						       constant_id);
 
-			clox_assert(IS_OBJ(v) && IS_OBJ_TYPE(AS_OBJ(v), OBJ_FUNCTION),
-				    "can only create closures from functions");
+			Lw_assert(IS_OBJ(v) && IS_OBJ_TYPE(AS_OBJ(v), OBJ_FUNCTION),
+				  "can only create closures from functions");
 
 			struct obj_closure *closure =
 				obj_closure_new(vm, AS_FUNCTION(AS_OBJ(v)));

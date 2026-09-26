@@ -21,7 +21,7 @@ struct call_frame {
 #include "../vendor/libfun/include/stack.h"
 
 
-/* The clox vm. */
+/* The Lw vm. */
 struct vm {
 	struct str_pool *strings;
 	struct globals *globals;

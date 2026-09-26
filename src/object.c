@@ -39,19 +39,19 @@ struct obj *obj_clone(struct vm *vm, const struct obj *o)
 {
 	switch (OBJ_TYPE(o)) {
 	case OBJ_FUNCTION:
-		clox_fatal("functions are not clonable");
+		Lw_fatal("functions are not clonable");
 		break;
 
 	case OBJ_CLOSURE:
-		clox_fatal("closures are not clonable");
+		Lw_fatal("closures are not clonable");
 		break;
 
 	case OBJ_UPVALUE:
-		clox_fatal("closures are not clonable");
+		Lw_fatal("closures are not clonable");
 		break;
 
 	case OBJ_NATIVE_FUNCTION:
-		clox_fatal("native functions are not clonable");
+		Lw_fatal("native functions are not clonable");
 		break;
 
 	case OBJ_STR_LITERAL:
@@ -83,10 +83,10 @@ void obj_print(const struct obj *o, const struct vm *vm)
 		const char *out_chars;
 		size_t out_len;
 
-		clox_assert(str_pool_get_chars(vm->strings,
-					       AS_STR_LITERAL(o)->id,
-					       &out_chars,
-					       &out_len),
+		Lw_assert(str_pool_get_chars(vm->strings,
+					     AS_STR_LITERAL(o)->id,
+					     &out_chars,
+					     &out_len),
 			    "str literal not found, possibly GC'ed!");
 		printf("%.*s\n", (int) out_len, out_chars);
 		break;
@@ -149,7 +149,7 @@ struct obj_closure *obj_closure_new(struct vm *vm,
 	else
 		upvalues = NULL;
 
-	clox_assert(obj, "cannot malloc");
+	Lw_assert(obj, "cannot malloc");
 
 	*obj = (struct obj_closure) {
 		.obj = { .type = OBJ_CLOSURE },

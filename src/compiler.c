@@ -52,7 +52,7 @@ static void compile_expression(struct chunk *c,
 		switch (ralt_idx(n)) {
 		case 0:
 			if (is_lvalue)/* TODO: rvalue error handling */
-				clox_fatal("expression is not assignable");
+				Lw_fatal("expression is not assignable");
 
 			rdesc_flip_left(n, 2);
 			compile_expression(c, rchild(n, 0), current, is_lvalue);
@@ -151,7 +151,7 @@ static void compile_expression(struct chunk *c,
 		switch (ralt_idx(n)) {
 		case 0:
 			if (is_lvalue)/* TODO: rvalue error handling */
-				clox_fatal("expression is not assignable");
+				Lw_fatal("expression is not assignable");
 
 			compile_expression(c, rchild(n, 0), current, is_lvalue);
 			compile_expression(c, rchild(n, 2), current, is_lvalue);
@@ -178,7 +178,7 @@ static void compile_expression(struct chunk *c,
 		switch (ralt_idx(n)) {
 		case 0:
 			if (is_lvalue)/* TODO: rvalue error handling */
-				clox_fatal("expression is not assignable");
+				Lw_fatal("expression is not assignable");
 
 			compile_expression(c, rchild(n, 1), current, is_lvalue);
 
@@ -205,7 +205,7 @@ static void compile_expression(struct chunk *c,
 		switch (ralt_idx(n)) {
 		case 0: {
 			if (is_lvalue) /* TODO: rvalue error handling */
-				clox_fatal("expression is not assignable");
+				Lw_fatal("expression is not assignable");
 
 			uint32_t arg_count = 0;
 
@@ -217,7 +217,7 @@ static void compile_expression(struct chunk *c,
 					     &arg_count);
 
 			if (arg_count > 255)
-				clox_fatal("too many arguments!");
+				Lw_fatal("too many arguments!");
 
 			emit_inst_u8(OP_CALL, arg_count);
 
@@ -229,7 +229,7 @@ static void compile_expression(struct chunk *c,
 			/* TODO: catch non-assignable, i.e. a() but not a().c.
 			 * rvalue if ends with a call */
 
-			clox_fatal("getattr is not implemented yet");
+			Lw_fatal("getattr is not implemented yet");
 			break;
 
 		case 2:
@@ -239,7 +239,7 @@ static void compile_expression(struct chunk *c,
 
 	case NT_PRIMARY:
 		if (is_lvalue && ralt_idx(n) < 6) /* TODO: rvalue error handling */
-			clox_fatal("expression is not assignable");
+			Lw_fatal("expression is not assignable");
 
 		switch (ralt_idx(n)) {
 		case 0:
@@ -272,11 +272,11 @@ static void compile_expression(struct chunk *c,
 			break;
 
 		case 6:
-			clox_fatal("'this' keyword is not implemented yet");
+			Lw_fatal("'this' keyword is not implemented yet");
 			break;
 
 		case 7:
-			clox_fatal("attr inheritance is not implemented yet");
+			Lw_fatal("attr inheritance is not implemented yet");
 			break;
 
 		case 8: {
@@ -605,7 +605,7 @@ static void compile_decl(struct chunk *c,
 {
 	switch (ralt_idx(n)) {
 	case 0:
-		clox_fatal("classes are not implemented yet");
+		Lw_fatal("classes are not implemented yet");
 		break;
 
 	case 1:

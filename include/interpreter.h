@@ -9,7 +9,7 @@
 #include "../vendor/rdesc/include/rdesc.h"
 
 
-/* The clox interpreter. */
+/* The Lw interpreter. */
 struct interpreter {
 	struct str_pool strings;
 	struct globals globals;

@@ -1,6 +1,6 @@
 # Build & directory configuration
 MODE ?= release
-PROGRAM_NAME = clox
+PROGRAM_NAME = Lw
 
 SRC_DIR = src
 TEST_SRC_DIR = tests
@@ -48,7 +48,7 @@ $(LIBFUN_DIR)/libfun.mk: | $(LIBFUN_DIR)/
 	cd $(LIBFUN_DIR)/ && \
 		git init -q && \
 		git remote add origin https://github.com/metwse/libfun.git && \
-		git fetch --depth 1 origin 23c1d7807375913e32b5b3207058e5984519e31f && \
+		git fetch --depth 1 origin 46320e2222cc2c2de19ea83ccb29916266e84648 && \
 		git checkout -q FETCH_HEAD
 
 $(RDESC_DIR)/rdesc.mk:

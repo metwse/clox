@@ -30,7 +30,7 @@ struct chunk_line {
 
 /* Compiled chunk. */
 struct chunk {
-	/* clox instructions. */
+	/* Lw instructions. */
 	struct fstack_chunk chunk;
 	struct fstack_chunk_line chunk_line;
 

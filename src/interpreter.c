@@ -15,17 +15,17 @@
 #include <string.h>
 
 
-struct rdesc_grammar clox;
+struct rdesc_grammar Lw;
 
 void interpreter_xstatic_init(void)
 {
 	scanner_xstatic_init();
 
-	clox_assert(rdesc_grammar_init_checked(&clox,
-					       NT_COUNT,
-					       NT_MAX_ALTERNATIVE_COUNT,
-					       NT_MAX_ALTERNATIVE_SIZE,
-					       production_rules) == 0,
+	Lw_assert(rdesc_grammar_init_checked(&Lw,
+					     NT_COUNT,
+					     NT_MAX_ALTERNATIVE_COUNT,
+					     NT_MAX_ALTERNATIVE_SIZE,
+					     production_rules) == 0,
 		   "cannot initialize grammar");
 }
 
@@ -33,16 +33,16 @@ void interpreter_static_destroy(void)
 {
 	scanner_static_destroy();
 
-	rdesc_grammar_destroy(&clox);
+	rdesc_grammar_destroy(&Lw);
 }
 
 
 void interpreter_xinit(struct interpreter *i)
 {
-	clox_assert(rdesc_init(&i->parser,
-			       &clox,
-			       sizeof(struct seminfo),
-			       NULL) == 0,
+	Lw_assert(rdesc_init(&i->parser,
+			     &Lw,
+			     sizeof(struct seminfo),
+			     NULL) == 0,
 		   "cannot initialize the parser");
 
 	str_pool_xinit(&i->strings);
@@ -53,8 +53,7 @@ void interpreter_xinit(struct interpreter *i)
 
 	vm_xinit(&i->vm, &i->strings, &i->globals);
 
-	clox_assert(rdesc_start(&i->parser, NT_DECL) == 0,
-		    "cannot start rdesc");
+	Lw_assert(rdesc_start(&i->parser, NT_DECL) == 0, "cannot start rdesc");
 
 	for (size_t j = 0; j < builtin_functions_len; j++) {
 		struct builtin_function builtin_function = builtin_functions[j];
@@ -115,30 +114,30 @@ int interpreter_run(struct interpreter *i, const char *source)
 			chunk_disassemble(&chunk, stderr, 0, 0);
 
 			if (vm_execute(&i->vm, &chunk))
-				clox_report("execution interrupted due to a "
-					    "runtime error");
+				Lw_report("execution interrupted due to a "
+					  "runtime error");
 
 			chunk_destroy(&chunk);
 
-			clox_assert(rdesc_start(&i->parser, NT_DECL) == 0,
-				    "cannot start rdesc");
+			Lw_assert(rdesc_start(&i->parser, NT_DECL) == 0,
+				  "cannot start rdesc");
 			continue;
 		  }
 
 		case RDESC_NOMATCH:
 			rdesc_reset(&i->parser);
 
-			clox_report("invalid token %s at line %d, column %d",
-				    tk_names[tk_id], seminfo.line, seminfo.col);
+			Lw_report("invalid token %s at line %d, column %d",
+				  tk_names[tk_id], seminfo.line, seminfo.col);
 
 			scanner_new_line(&i->scanner);
 
-			clox_assert(rdesc_start(&i->parser, NT_DECL) == 0,
-				    "cannot start rdesc");
+			Lw_assert(rdesc_start(&i->parser, NT_DECL) == 0,
+				  "cannot start rdesc");
 			return 1;
 
 		case RDESC_ENOMEM:
-			clox_fatal("out of memory");
+			Lw_fatal("out of memory");
 		}
 
 	}

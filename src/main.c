@@ -15,7 +15,7 @@ static char *read_file(const char *path)
 	rewind(file);
 
 	char *buffer = malloc(file_size + 1);
-	clox_assert(buffer, "cannot allocate buffer for file content");
+	Lw_assert(buffer, "cannot allocate buffer for file content");
 	size_t bytes_read = fread(buffer, sizeof(char), file_size, file);
 	buffer[bytes_read] = '\0';
 
@@ -42,7 +42,7 @@ static void repl(struct interpreter *i) {
 int main(int argc, char *argv[])
 {
 	if (argc > 2)
-		clox_fatal("Usage %s [script]", argv[0]);
+		Lw_fatal("Usage %s [script]", argv[0]);
 
 	interpreter_xstatic_init();
 

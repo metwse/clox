@@ -1,9 +1,13 @@
-# clox
+# The Lw Programming Language
 
-C implementation of The Lox Language, from *Crafting Interpreters* by Robert
-Nystrom.
+This is the main code repository for Lw. It contains the interpreter and
+standard library.
 
-[craftinginterpreters.com](https://craftinginterpreters.com/)
+
+## Featuring
+- [ ] Lightweight, embeddable scripting language.
+- [ ] Trait-based generics.
+- [ ] Dynamic typing.
 
 
 ## Build Dependencies
